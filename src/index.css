@@ -1,0 +1,29 @@
+/* ============================================
+   Handshake Union — Custom Styles
+   ============================================ */
+
+/* Layout: sticky footer */
+.layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.main-content {
+  flex: 1;
+}
+
+/* Override Bulma footer padding to be less aggressive */
+.footer {
+  padding: 2rem 1.5rem;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Ensure emoji icons render nicely */
+.icon i {
+  font-style: normal;
+}
