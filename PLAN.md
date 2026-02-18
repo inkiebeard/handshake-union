@@ -31,11 +31,15 @@ Three rooms to start:
 - **#whinge** — venting about work (cathartic, validates experience)
 
 **Chat Features:**
-- 1 hour message history max (ephemeral by design)
-- Basic threading/replies
-- Emoji reactions
-- Shows pseudonym, not real identity
-- Real-time via Supabase subscriptions
+- 1 hour message history max (ephemeral by design, cleanup via pg_cron)
+- Basic threading/replies (reply_to_id with visual indicator)
+- Emoji reactions (toggle on/off, picker UI)
+- Custom emotes via `:shortcode:` syntax (admin-managed)
+- Emoji autocomplete while typing
+- Shows pseudonym + PixelAvatar, not real identity
+- Real-time via Supabase broadcast triggers
+- Message reporting (rate-limited, machine-copies content)
+- Delete own messages
 
 ### 3. Onboarding Form
 Collect structured data (all optional, but encouraged):
@@ -51,10 +55,32 @@ Collect structured data (all optional, but encouraged):
 | Requires Visa | Checkbox | Yes/No (deliberately vague to avoid legal complexity) |
 
 ### 4. Stats Dashboard
-- Aggregate view of community data
-- Compare against baseline "industry standard" data
-- Simple charts: salary by experience, WFH distribution, etc.
-- Show sample sizes so people understand statistical significance
+- Aggregate view of community data with privacy-preserving sample size guards
+- Interactive SVG salary progression chart (experience vs salary)
+- Industry baseline comparison with toggle-able role overlays
+- Community data overlay (solid white line) vs industry baselines (dotted colored lines)
+- Distribution bar charts: salary, experience, role, WFH, employment type
+- Confidence indicators based on sample size (n≥30 minimum, n≥50 moderate, n≥100 good)
+- Salary data hidden until sufficient sample size to protect privacy
+
+### 5. Chat Integrity & Moderation
+- **Cryptographic receipts** — SHA-256 hash of every message stored automatically via trigger. No readable content, no author identity. System-level only (admin access).
+- **Live moderation reports** — users can report messages while they still exist (< 1hr). Content is machine-copied from DB (never user-provided). Linked to receipt for tamper-evident verification.
+- **30-day report TTL** — moderation reports hard-deleted after 30 days. Receipts persist indefinitely (~80 bytes each).
+- **Retrospective submissions** (future) — separate form for reporting after message TTL. User-provided content verified against receipt hashes. Lower trust level.
+
+### 6. Role-Based Access Control
+Three-tier system via JWT `app_metadata` claims:
+
+| Role | Default? | Access |
+|------|----------|--------|
+| `member` | Yes (set on signup) | Chat, own profile, report messages, view stats |
+| `moderator` | No (assigned by admin) | + View/resolve moderation reports |
+| `admin` | No (assigned by admin) | + Verify receipts, assign roles, system dashboards |
+
+- `service_role` key bypasses RLS entirely (automated processes only)
+- Roles checked via `is_moderator()` / `is_admin()` helper functions in RLS policies
+- Receipts invisible to all human roles — only accessible via admin `verify_message_receipt()` function
 
 ---
 
@@ -85,57 +111,92 @@ handshake-union/
 │   │   │   ├── Footer.tsx
 │   │   │   └── Layout.tsx
 │   │   ├── auth/
-│   │   │   ├── LoginForm.tsx
-│   │   │   ├── OAuthButtons.tsx
 │   │   │   └── ProtectedRoute.tsx
-│   │   ├── chat/
-│   │   │   ├── ChatRoom.tsx
-│   │   │   ├── MessageList.tsx
-│   │   │   ├── MessageInput.tsx
-│   │   │   ├── Message.tsx
-│   │   │   └── ReactionPicker.tsx
 │   │   ├── onboarding/
-│   │   │   └── OnboardingForm.tsx
-│   │   └── stats/
-│   │       ├── StatsOverview.tsx
-│   │       ├── SalaryChart.tsx
-│   │       └── ComparisonCard.tsx
+│   │   │   └── OnboardingForm.tsx      # reusable in onboarding + profile modes
+│   │   ├── chat/
+│   │   │   ├── MessageList.tsx          # scrollable message container
+│   │   │   ├── MessageInput.tsx         # input with emoji autocomplete
+│   │   │   ├── Message.tsx              # single message with reactions
+│   │   │   ├── ReactionPicker.tsx       # emoji picker for reactions
+│   │   │   └── EmojiAutocomplete.tsx    # :emoji: autocomplete dropdown
+│   │   ├── stats/                       # Components inline in Stats.tsx
+│   │   │   ├── SalaryProgressionChart   # SVG line/area chart with role toggles
+│   │   │   ├── BarChart                 # Reusable distribution bar chart
+│   │   │   ├── GuardedBarChart          # BarChart with sample size guard
+│   │   │   └── SampleSizeGuard          # Reusable guard component
+│   │   └── PixelAvatar.tsx              # deterministic 5x5 pixel art avatars
+│   ├── contexts/
+│   │   ├── ChatContext.tsx             # chat state, messages, reactions, realtime
+│   │   └── EmoteContext.tsx            # custom emote provider
 │   ├── hooks/
 │   │   ├── useAuth.ts
 │   │   ├── useProfile.ts
-│   │   ├── useMessages.ts
-│   │   └── useStats.ts
+│   │   ├── useCustomEmotes.ts          # custom emote fetching
+│   │   ├── useMessages.ts              # TODO: Phase 4 (legacy)
+│   │   ├── useStats.ts                 # aggregate stats + baselines + utilities
+│   │   └── useMembers.ts               # public member directory stats
 │   ├── lib/
 │   │   ├── supabase.ts
-│   │   └── constants.ts
+│   │   ├── constants.ts
+│   │   └── emoji.tsx                   # emoji rendering utilities
 │   ├── pages/
 │   │   ├── Home.tsx
 │   │   ├── Login.tsx
 │   │   ├── AuthCallback.tsx
-│   │   ├── Chat.tsx
+│   │   ├── Chat.tsx                     # full chat with rooms + realtime
 │   │   ├── Onboarding.tsx
-│   │   └── Stats.tsx
+│   │   ├── Profile.tsx                  # added — not in original plan
+│   │   ├── Stats.tsx                    # full stats dashboard with charts
+│   │   └── Members.tsx                  # public member directory
 │   ├── types/
 │   │   └── database.ts
 │   ├── App.tsx
 │   ├── main.tsx
 │   └── index.css
 ├── supabase/
+│   ├── config.toml
 │   └── migrations/
-│       └── 001_initial_schema.sql
+│       ├── 001_initial_schema.sql
+│       ├── 002_varied_pseudonyms.sql
+│       ├── 003_fix_search_path.sql
+│       ├── 004_profile_history.sql
+│       ├── 005_privacy_lockdown.sql
+│       ├── 006_chat_integrity.sql
+│       ├── 007_roles.sql
+│       ├── 008_fix_snapshot_triggers.sql
+│       ├── 009_fix_digest_search_path.sql
+│       ├── 010_fix_digest_extensions_schema.sql
+│       ├── 011_broadcast_triggers.sql
+│       ├── 012_fix_reactions_broadcast.sql
+│       ├── 013_custom_emotes.sql
+│       ├── 014_seed_baseline_stats.sql
+│       ├── 015_enable_cron_cleanup.sql
+│       └── 016_public_member_stats.sql
 ├── index.html
 ├── package.json
 ├── tsconfig.json
+├── tsconfig.app.json
+├── tsconfig.node.json
 ├── vite.config.ts
 ├── .env.example
 ├── .gitignore
 ├── LICENSE (AGPL-3.0)
+├── PLAN.md
 └── README.md
 ```
 
 ---
 
 ## Database Schema
+
+**Migrations:**
+```
+001_initial_schema → 002_varied_pseudonyms → 003_fix_search_path → 004_profile_history →
+005_privacy_lockdown → 006_chat_integrity → 007_roles → 008_fix_snapshot_triggers →
+009_fix_digest_search_path → 010_fix_digest_extensions_schema → 011_broadcast_triggers →
+012_fix_reactions_broadcast → 013_custom_emotes → 014_seed_baseline_stats → 015_enable_cron_cleanup → 016_public_member_stats
+```
 
 ### Tables
 
@@ -146,6 +207,7 @@ handshake-union/
 - created_at: timestamp
 - updated_at: timestamp
 - onboarding_complete: boolean
+- message_count: integer (lifetime messages sent)
 - salary_band: enum (nullable)
 - experience_band: enum (nullable)
 - employment_type: enum (nullable)
@@ -188,22 +250,125 @@ handshake-union/
 - created_at: timestamp
 ```
 
-### Row Level Security
+**profile_snapshots** (added — tracks profile changes over time)
+```sql
+- id: uuid
+- profile_id: uuid (FK to profiles)
+- salary_band: enum (nullable)
+- experience_band: enum (nullable)
+- employment_type: enum (nullable)
+- wfh_status: enum (nullable)
+- role_title: enum (nullable)
+- country: text (nullable)
+- requires_visa: boolean (nullable)
+- captured_at: timestamp
+- indexes: (profile_id, captured_at DESC), (captured_at DESC)
+```
 
-- **profiles**: Users can read all, update only their own
+**message_receipts** (added — cryptographic proof of message existence)
+```sql
+- id: uuid
+- content_hash: bytea (SHA-256 of message content)
+- room: enum ('general', 'memes', 'whinge')
+- created_at: timestamp (mirrors message created_at)
+- indexes: (content_hash), (room, created_at DESC)
+- RLS: deny ALL for authenticated. System-level only.
+```
+
+**moderation_reports** (added — reported message snapshots)
+```sql
+- id: uuid
+- receipt_id: uuid (FK to message_receipts — tamper-evident link)
+- reporter_id: uuid (FK to profiles)
+- reason: text (nullable, max 500 chars)
+- message_content: text (machine-copied from messages table)
+- message_author_id: uuid
+- message_room: enum
+- message_created_at: timestamp
+- reported_at: timestamp
+- status: text ('pending', 'reviewed', 'actioned', 'dismissed')
+- resolved_at: timestamp (nullable)
+- resolved_by: uuid (nullable, FK to profiles)
+- resolution_notes: text (nullable)
+- expires_at: timestamp (default now + 30 days)
+- RLS: moderator+ can SELECT/UPDATE, admin can DELETE. Members use report_message() only.
+```
+
+**custom_emotes** (added — community emotes for chat)
+```sql
+- id: uuid
+- code: text (unique, shortcode format e.g. 'partyparrot')
+- url: text (hosted image/GIF URL)
+- alt: text (accessibility description)
+- category: text (default 'custom')
+- enabled: boolean (default true)
+- created_at: timestamp
+- created_by: uuid (FK to profiles, nullable)
+- RLS: anyone can read enabled emotes, admins can manage
+```
+
+### Database Functions & Triggers
+
+**Pseudonym management:**
+- `generate_pseudonym()` — random pseudonym from prefix pool + hex suffix
+- `handle_new_user()` — trigger: auto-creates profile on auth.users insert
+- `rename_pseudonym(new_name TEXT)` — validated pseudonym rename (3-24 chars, lowercase + underscore)
+
+**Profile automation:**
+- `update_updated_at()` — trigger: auto-updates `updated_at` on profile change
+- `capture_profile_snapshot()` — trigger: snapshots work fields on change
+- `capture_initial_snapshot()` — trigger: snapshots when onboarding_complete flips to true
+
+**Chat integrity (migration 006):**
+- `create_message_receipt()` — trigger: auto-creates SHA-256 receipt on message INSERT (SECURITY DEFINER)
+- `report_message(target_message_id, reason)` — live report: machine-copies message content + links to receipt. Rate-limited (10/hr). Prevents self-reports and duplicates.
+- `resolve_report(report_id, status, notes)` — moderator+: resolves a pending moderation report
+
+**Role management (migration 007):**
+- `is_moderator()` — JWT claim check: returns true for moderator or admin
+- `is_admin()` — JWT claim check: returns true for admin only
+- `assign_role(target_user_id, new_role)` — admin-only: assigns member/moderator/admin role
+- `verify_message_receipt(content, room, time_start, time_end)` — admin-only: checks if receipt matching alleged content exists. Returns boolean only.
+
+**Aggregate functions (safe stats access):**
+- `get_pseudonym(user_id UUID)` — returns pseudonym for chat display
+- `get_salary_distribution()` — salary band counts
+- `get_role_distribution()` — role title counts
+- `get_experience_distribution()` — experience band counts
+- `get_wfh_distribution()` — WFH status counts
+- `get_employment_distribution()` — employment type counts
+- `get_community_summary()` — total members + members with data
+- `get_salary_trend()` — monthly salary trends from snapshots
+- `get_wfh_trend()` — monthly WFH trends from snapshots
+
+**Public member stats (migration 016):**
+- `increment_message_count()` — trigger: increments profile.message_count on message INSERT
+- `get_public_member_stats()` — returns public-safe stats for all members (pseudonym, tenure, message count, profile complete)
+- `get_member_stats(pseudonym)` — returns stats for a single member by pseudonym
+
+### Row Level Security (updated — privacy lockdown + role-gated)
+
+- **profiles**: Users can read **only their own** row, update only their own (no enumeration)
+- **profile_snapshots**: Users can read only their own snapshots
 - **messages**: Authenticated users can read all, insert own, delete own
 - **reactions**: Authenticated users can read all, insert/delete own
 - **baseline_stats**: Authenticated users can read all
+- **message_receipts**: Deny ALL for authenticated. System-level only (SECURITY DEFINER functions bypass RLS)
+- **moderation_reports**: Deny ALL baseline. Moderator+ can SELECT/UPDATE. Admin can DELETE. Members INSERT via `report_message()` only.
+- **custom_emotes**: Anyone can read enabled emotes. Admins can manage (insert/update/delete).
 
 ### Realtime
 
-Enable Supabase Realtime for:
-- `messages` table
-- `reactions` table
+Enabled for:
+- `messages` table (via broadcast triggers for INSERT/UPDATE/DELETE)
+- `reactions` table (via broadcast triggers for INSERT/DELETE)
 
-### Cleanup Job
+### Cleanup Jobs
 
-Supabase cron or edge function to delete messages older than 1 hour.
+Two scheduled crons (requires pg_cron extension — commented in migration, run via SQL editor):
+- **Messages**: Delete older than 1 hour, every 5 minutes
+- **Moderation reports**: Delete expired (30-day TTL), daily at 3am UTC
+- **Receipts**: No cleanup — ~80 bytes each, ~29 MB/year at 1000 msgs/day. Keep indefinitely.
 
 ---
 
@@ -243,58 +408,113 @@ Supabase cron or edge function to delete messages older than 1 hour.
 ### Flow 4: View Stats
 ```
 1. Click "Stats" in nav
-2. See aggregate data from community
-3. See baseline industry data for comparison
-4. Filter by role, experience level, etc.
+2. See summary cards (members, median salary band, top role)
+3. View salary progression chart:
+   a. Toggle industry baseline roles on/off (dotted colored lines)
+   b. Toggle community data overlay on/off (solid white line, requires n≥30)
+4. Browse distribution charts (salary, experience, role, WFH, employment)
+5. Note: Salary data hidden until n≥30 to protect privacy
 ```
 
 ---
 
 ## Implementation Phases
 
-### Phase 1: Foundation
-- [ ] Project setup (Vite, React, TypeScript, Bulma)
-- [ ] Supabase project creation
-- [ ] Database schema migration
-- [ ] Basic routing structure
-- [ ] Layout components (Navbar, Footer)
+### Phase 1: Foundation ✅ COMPLETE
+- [x] Project setup (Vite, React, TypeScript, Bulma)
+- [x] Supabase project creation
+- [x] Database schema migration (001 through 005)
+- [x] Basic routing structure
+- [x] Layout components (Navbar, Footer)
+- [x] Terminal aesthetic UI theme (custom CSS variables, monospace fonts, dark theme)
+- [x] ASCII art logo on home page
 
-### Phase 2: Authentication
-- [ ] Supabase client setup
-- [ ] Magic link login
-- [ ] GitHub OAuth
-- [ ] GitLab OAuth
-- [ ] Auth callback handling
-- [ ] Protected routes
-- [ ] Auto-pseudonym generation
+### Phase 2: Authentication ✅ COMPLETE
+- [x] Supabase client setup
+- [x] Magic link login
+- [x] GitHub OAuth
+- [x] GitLab OAuth
+- [x] Auth callback handling
+- [x] Protected routes
+- [x] Auto-pseudonym generation (via DB trigger, varied prefix pool)
 
-### Phase 3: Onboarding
-- [ ] Onboarding form component
-- [ ] Form validation
-- [ ] Profile update logic
-- [ ] Skip option (can complete later)
+### Phase 3: Onboarding ✅ COMPLETE
+- [x] Onboarding form component
+- [x] Form validation
+- [x] Profile update logic
+- [x] Skip option (can complete later)
+- [x] Reusable form — `OnboardingForm` works in both "onboarding" and "profile" modes
 
-### Phase 4: Chat
-- [ ] Chat room component
-- [ ] Message list with realtime subscription
-- [ ] Message input
-- [ ] Room switching (tabs)
-- [ ] Reply threading (basic)
-- [ ] Emoji reactions
+### Phase 3.5: Profile & Privacy (added — not in original plan) ✅ COMPLETE
+- [x] Profile page (`/profile`) for viewing and editing work details after onboarding
+- [x] PixelAvatar component — deterministic 5x5 pixel art from pseudonym hash (pure SVG)
+- [x] Pseudonym rename with two-step privacy warning (validated: 3-24 chars, lowercase alphanumeric + underscore)
+- [x] Profile history tracking — `profile_snapshots` table auto-captures changes via triggers
+- [x] Privacy lockdown (migration 005) — profiles restricted to own-row-only reads, no enumeration
+- [x] Aggregate DB functions for safe stats access (salary, role, experience, WFH, employment distributions)
+- [x] Trend functions (`get_salary_trend`, `get_wfh_trend`) from profile snapshots
+- [x] Community summary function (`get_community_summary`)
+- [x] Search path security — all DB functions use `SET search_path = ''`
 
-### Phase 5: Stats
-- [ ] Stats overview page
-- [ ] Aggregate queries
-- [ ] Simple visualizations (can use basic CSS charts or a lightweight lib)
-- [ ] Baseline data comparison
+### Phase 3.75: Chat Integrity & Roles (added — not in original plan) ✅ COMPLETE
+- [x] Cryptographic receipts — `message_receipts` table with SHA-256 hashes, auto-trigger on message INSERT
+- [x] Receipt RLS lockdown — deny ALL for authenticated, system-level only
+- [x] Moderation reports — `moderation_reports` table with content snapshot + receipt link
+- [x] `report_message()` — live reports only, machine-copies content, rate-limited, prevents duplicates
+- [x] `resolve_report()` — moderator+ function with status validation
+- [x] Three-tier role system — member/moderator/admin via JWT `app_metadata` claims
+- [x] `is_moderator()` / `is_admin()` helper functions for RLS
+- [x] `assign_role()` — admin-only role assignment
+- [x] `verify_message_receipt()` — admin-only receipt verification (boolean only)
+- [x] Default role on signup — `handle_new_user()` updated to set `role: member`
+- [x] Role-gated RLS policies on moderation_reports
+- [x] Backfill roles for existing users
+- [x] Cleanup cron definitions (commented — requires pg_cron activation)
+- [x] TypeScript types for `UserRole`, `ModerationReportStatus`, `ModerationReport`
 
-### Phase 6: Polish & Deploy
-- [ ] Error handling
-- [ ] Loading states
-- [ ] Mobile responsiveness
+### Phase 4: Chat ✅ COMPLETE
+- [x] Chat page shell with room tabs (#general, #memes, #whinge)
+- [x] `ChatContext` — centralized chat state with realtime subscriptions
+- [x] Message list with realtime subscription (via Supabase broadcast)
+- [x] Message input component with emoji autocomplete
+- [x] Room switching (functional, join/leave room)
+- [x] Reply threading (basic — reply_to_id, visual thread indicator)
+- [x] Emoji reactions with toggle and picker
+- [x] Custom emotes (migration 013) — community-uploaded emotes
+- [x] Report button on messages (calls `report_message()`)
+- [x] Message deletion (own messages only)
+- [x] PixelAvatar display per message author
+npm run bui- [x] Message cleanup job (migration 015) — pg_cron schedules for 1hr message TTL + 30-day report TTL
+
+### Phase 5: Stats ✅ COMPLETE
+- [x] Stats page shell with placeholder layout
+- [x] Aggregate query functions ready in DB (distributions + trends)
+- [x] `useStats` hook — fetches all distributions, summary, and baselines in parallel
+- [x] CSS-based bar charts for salary, experience, role, WFH, employment distributions
+- [x] Seed baseline_stats with 2025 Australian developer salary data (migration 014)
+- [x] **Sample size guards** — `SampleSizeGuard` reusable component with confidence tiers:
+  - n < 30: Data hidden, progress bar shown
+  - n 30-49: Moderate confidence warning
+  - n ≥ 50: Good confidence
+- [x] **SVG Salary Progression Chart**:
+  - Experience (X-axis) vs Salary (Y-axis)
+  - Toggle-able industry baseline roles (dotted lines, transparent fill)
+  - Toggle-able community data overlay (solid white line, opaque fill)
+  - Full-width responsive design with viewBox scaling
+  - Color-coded role legend with click-to-toggle
+- [x] Summary cards with confidence indicators
+- [x] Low sample size warnings and empty state handling
+- [x] Methodology notes explaining data sources and confidence thresholds
+
+### Phase 6: Polish & Deploy 🔲 NOT STARTED
+- [ ] Error handling (partial — some exists in hooks)
+- [ ] Loading states (partial — exists in auth/profile/chat/stats)
+- [ ] Mobile responsiveness (partial — basic Bulma responsive)
+- [x] Activate pg_cron for message cleanup (migration 015)
 - [ ] Deploy to Vercel/Cloudflare
 - [ ] README documentation
 - [ ] Test with small group
+- [ ] Seed custom emotes with actual hosted images
 
 ---
 
@@ -303,7 +523,14 @@ Supabase cron or edge function to delete messages older than 1 hour.
 - **No passwords stored** — magic links and OAuth only
 - **Pseudonymous by default** — real identity never exposed
 - **Row Level Security** — database-level access control
+- **Privacy lockdown** — profiles restricted to own-row reads; stats exposed only via aggregate functions (no individual data enumeration)
+- **Search path security** — all DB functions use `SET search_path = ''` to prevent injection
 - **Ephemeral messages** — 1 hour TTL reduces long-term risk
+- **Cryptographic receipts** — SHA-256 hashes prove message existence without retaining readable content. Invisible to all user-facing roles (RLS deny-all). Enables screenshot verification.
+- **Moderation integrity** — reports machine-copy content from DB (never user-provided) and link to receipts for tamper-evident verification
+- **Role-based access** — three-tier system (member/moderator/admin) via JWT claims. Receipts admin-only. Moderation moderator+. Clean separation of concerns.
+- **Minimal data posture** — messages deleted after 1hr, reports after 30 days, only receipt hashes persist (no readable content)
+- **Profile history** — snapshots track changes for trend analysis without exposing individual records
 - **Open source** — code is auditable
 - **No analytics/tracking** — no third-party scripts
 - **HTTPS only** — enforced by hosting provider
@@ -321,24 +548,28 @@ If the POC shows demand, consider:
 - **Funding visibility** — display donations vs costs so community sees sustainability
 
 ### Features
+- **Retrospective report submissions** — `/report` form for reporting messages after TTL. User-provided content verified against receipt hashes. Screenshot upload (Supabase Storage). Trust levels: receipt-verified vs unverified.
+- **Moderator dashboard** — `/mod` route gated by role. View pending reports, resolve, see reported content.
+- **Admin dashboard** — `/admin` route. Receipt verification UI, role management, platform health metrics.
+- **Ban/warn system** — moderation actions beyond resolving reports (timeouts, pseudonym bans)
+- **Notification system** — alert moderators of new reports
 - **E2E encryption for DMs** (if we add DMs)
 - **Invite-only growth** (web of trust)
 - **More granular stats** (by company size, industry, location)
 - **Resource library** (templates, know-your-rights info)
 - **Integration with Professionals Australia** or similar
 - **Mobile app** (React Native or PWA)
-- **Moderation tools** (reports, timeouts)
 - **LLM-assisted moderation** (flag problematic content)
 
 ---
 
 ## Open Questions
 
-1. **Pseudonym customization?** — Let users pick their own pseudonym or keep it random?
+1. ~~**Pseudonym customization?**~~ — **RESOLVED:** Users can rename via `rename_pseudonym()` with privacy warning and validation (3-24 chars, lowercase alphanumeric + underscore).
 2. **Room creation?** — Just the three rooms, or let users create more?
 3. **Verification tiers?** — Some way to mark "verified developer" without deanonymizing?
-4. **Salary data granularity?** — Bands vs actual numbers? Bands are safer for anonymity.
-5. **Geographic granularity?** — State level? City level? Just country for now?
+4. ~~**Salary data granularity?**~~ — **RESOLVED:** Using bands. Aggregate functions expose distribution counts only.
+5. ~~**Geographic granularity?**~~ — **RESOLVED:** Country level only (Australia, New Zealand, Other).
 
 ---
 
