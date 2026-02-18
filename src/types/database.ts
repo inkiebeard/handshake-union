@@ -63,6 +63,10 @@ export type RoleTitle =
 
 export type ChatRoom = 'general' | 'memes' | 'whinge';
 
+export type UserRole = 'member' | 'moderator' | 'admin';
+
+export type ModerationReportStatus = 'pending' | 'reviewed' | 'actioned' | 'dismissed';
+
 // ============================================
 // Row types
 // ============================================
@@ -80,6 +84,7 @@ export interface Profile {
   role_title: RoleTitle | null;
   country: string | null;
   requires_visa: boolean | null;
+  message_count: number;
 }
 
 export interface Message {
@@ -101,6 +106,19 @@ export interface Reaction {
   created_at: string;
 }
 
+export interface ProfileSnapshot {
+  id: string;
+  profile_id: string;
+  salary_band: SalaryBand | null;
+  experience_band: ExperienceBand | null;
+  employment_type: EmploymentType | null;
+  wfh_status: WfhStatus | null;
+  role_title: RoleTitle | null;
+  country: string | null;
+  requires_visa: boolean | null;
+  captured_at: string;
+}
+
 export interface BaselineStat {
   id: string;
   source: string;
@@ -111,4 +129,38 @@ export interface BaselineStat {
   median_salary: number;
   sample_size: number | null;
   created_at: string;
+}
+
+// ============================================
+// Moderation types
+// ============================================
+// Note: MessageReceipt is intentionally NOT typed here.
+// Receipts are system-level only — never exposed to frontend.
+
+export interface ModerationReport {
+  id: string;
+  receipt_id: string;
+  reporter_id: string;
+  reason: string | null;
+  message_content: string;
+  message_author_id: string;
+  message_room: ChatRoom;
+  message_created_at: string;
+  reported_at: string;
+  status: ModerationReportStatus;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  resolution_notes: string | null;
+  expires_at: string;
+}
+
+export interface CustomEmote {
+  id: string;
+  code: string;
+  url: string;
+  alt: string;
+  category: string;
+  enabled: boolean;
+  created_at: string;
+  created_by: string | null;
 }
