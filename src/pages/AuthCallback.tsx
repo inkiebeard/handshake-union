@@ -15,7 +15,6 @@ export function AuthCallback() {
         return;
       }
 
-      // Check if user has completed onboarding
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         navigate('/login');
@@ -41,10 +40,8 @@ export function AuthCallback() {
   if (error) {
     return (
       <section className="section">
-        <div className="container has-text-centered">
-          <div className="notification is-danger">
-            <p>Authentication error: {error}</p>
-          </div>
+        <div className="container">
+          <p style={{ color: 'var(--danger)' }}>error: {error}</p>
         </div>
       </section>
     );
@@ -52,8 +49,8 @@ export function AuthCallback() {
 
   return (
     <section className="section">
-      <div className="container has-text-centered">
-        <p className="is-size-5">Signing you in...</p>
+      <div className="container">
+        <p className="comment">authenticating...</p>
       </div>
     </section>
   );

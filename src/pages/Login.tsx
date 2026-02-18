@@ -13,8 +13,8 @@ export function Login() {
   if (loading) {
     return (
       <section className="section">
-        <div className="container has-text-centered">
-          <p>Loading...</p>
+        <div className="container">
+          <p className="comment">loading...</p>
         </div>
       </section>
     );
@@ -63,15 +63,10 @@ export function Login() {
         <div className="container">
           <div className="columns is-centered">
             <div className="column is-5">
-              <div className="box has-text-centered">
-                <span className="is-size-1">📧</span>
-                <h2 className="title is-4 mt-4">Check your email</h2>
-                <p>
-                  We've sent a magic link to <strong>{email}</strong>.
-                  <br />
-                  Click the link to sign in — no password needed.
-                </p>
-              </div>
+              <p className="prompt">check your email</p>
+              <br />
+              <p>magic link sent to <strong>{email}</strong></p>
+              <p className="comment">click the link to sign in — no password needed</p>
             </div>
           </div>
         </div>
@@ -84,70 +79,65 @@ export function Login() {
       <div className="container">
         <div className="columns is-centered">
           <div className="column is-5">
-            <div className="box">
-              <h2 className="title is-4 has-text-centered">Join the Union</h2>
-              <p className="has-text-centered has-text-grey mb-5">
-                No passwords. No bullshit. Just a magic link.
-              </p>
+            <p className="prompt">authenticate</p>
+            <p className="comment">no passwords. just a magic link or oauth.</p>
 
-              {error && (
-                <div className="notification is-danger is-light">
-                  {error}
+            <br />
+
+            {error && (
+              <div className="notification is-danger">
+                <span style={{ color: 'var(--danger)' }}>error:</span> {error}
+              </div>
+            )}
+
+            <form onSubmit={handleMagicLink}>
+              <div className="field">
+                <label className="label" htmlFor="email">email</label>
+                <div className="control">
+                  <input
+                    id="email"
+                    className="input"
+                    type="email"
+                    placeholder="worker@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
                 </div>
-              )}
-
-              <form onSubmit={handleMagicLink}>
-                <div className="field">
-                  <label className="label" htmlFor="email">Email</label>
-                  <div className="control">
-                    <input
-                      id="email"
-                      className="input"
-                      type="email"
-                      placeholder="worker@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="field">
-                  <div className="control">
-                    <button
-                      className={`button is-primary is-fullwidth ${isLoading ? 'is-loading' : ''}`}
-                      type="submit"
-                      disabled={isLoading}
-                    >
-                      Send Magic Link
-                    </button>
-                  </div>
-                </div>
-              </form>
-
-              <div className="has-text-centered my-4">
-                <span className="has-text-grey">or sign in with</span>
               </div>
 
-              <div className="buttons is-centered">
-                <button
-                  className="button is-dark"
-                  onClick={() => handleOAuth('github')}
-                >
-                  GitHub
-                </button>
-                <button
-                  className="button is-link"
-                  onClick={() => handleOAuth('gitlab')}
-                >
-                  GitLab
+              <div className="field">
+                <div className="control">
+                  <button
+                    className={`button is-primary is-fullwidth ${isLoading ? 'is-loading' : ''}`}
+                    type="submit"
+                    disabled={isLoading}
+                  >
+                    send magic link
+                  </button>
+                </div>
+              </div>
+            </form>
+
+            <hr className="term-divider" />
+
+            <p className="comment">or use oauth</p>
+            <br />
+            <div className="field is-grouped">
+              <div className="control">
+                <button className="button is-dark" onClick={() => handleOAuth('github')}>
+                  github
                 </button>
               </div>
-
-              <p className="has-text-centered has-text-grey is-size-7 mt-4">
-                You'll be assigned an anonymous pseudonym. Your real identity is never shown.
-              </p>
+              <div className="control">
+                <button className="button is-link" onClick={() => handleOAuth('gitlab')}>
+                  gitlab
+                </button>
+              </div>
             </div>
+
+            <br />
+            <p className="comment">you'll be assigned a pseudonym. identity stays hidden.</p>
           </div>
         </div>
       </div>

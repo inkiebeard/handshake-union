@@ -10,11 +10,11 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   if (loading) {
     return (
-      <div className="section">
-        <div className="container has-text-centered">
-          <p className="is-size-5">Loading...</p>
+      <section className="section">
+        <div className="container">
+          <p className="comment">loading...</p>
         </div>
-      </div>
+      </section>
     );
   }
 
