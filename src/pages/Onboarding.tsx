@@ -1,26 +1,33 @@
 import { useAuth } from '../hooks/useAuth';
+import { useProfile } from '../hooks/useProfile';
+import { OnboardingForm } from '../components/onboarding/OnboardingForm';
 
 export function Onboarding() {
   const { user } = useAuth();
+  const { profile, loading, error, refetch } = useProfile(user?.id);
 
   return (
     <section className="section">
       <div className="container">
         <div className="columns is-centered">
-          <div className="column is-6">
-            <h1 className="title">Your Profile</h1>
-            <p className="subtitle has-text-grey">
-              Help us build a picture of working conditions for Australian devs.
-              <br />
-              All fields are optional — share what you're comfortable with.
-            </p>
-            <div className="box">
-              <p className="has-text-grey has-text-centered">
-                {user
-                  ? 'Onboarding form will be implemented in Phase 3.'
-                  : 'Please log in to complete your profile.'}
-              </p>
-            </div>
+          <div className="column is-5">
+            <p className="prompt">profile</p>
+            <p className="comment">help build a picture of conditions for AU devs</p>
+            <p className="comment">all fields optional — share what you're comfortable with</p>
+
+            <br />
+
+            {loading && <p className="comment">loading profile...</p>}
+
+            {error && (
+              <div className="notification is-danger">
+                error: {error}
+              </div>
+            )}
+
+            {profile && (
+              <OnboardingForm profile={profile} onSaved={refetch} />
+            )}
           </div>
         </div>
       </div>
