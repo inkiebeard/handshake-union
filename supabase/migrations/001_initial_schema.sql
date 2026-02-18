@@ -95,26 +95,38 @@ CREATE TABLE profiles (
 CREATE OR REPLACE FUNCTION generate_pseudonym()
 RETURNS TEXT AS $$
 DECLARE
+  prefixes TEXT[] := ARRAY[
+    'anon', 'byte', 'coder', 'debug', 'dev',
+    'ghost', 'hack', 'kern', 'node', 'null',
+    'pixel', 'root', 'shell', 'stack', 'sys',
+    'void', 'wire', 'zero', 'bit', 'flux'
+  ];
+  chosen_prefix TEXT;
+  hex_suffix TEXT;
   new_pseudonym TEXT;
 BEGIN
-  new_pseudonym := 'worker_' || substr(md5(random()::text), 1, 6);
+  chosen_prefix := prefixes[1 + floor(random() * array_length(prefixes, 1))::int];
+  hex_suffix := substr(md5(random()::text), 1, 6);
+  new_pseudonym := chosen_prefix || '_' || hex_suffix;
   -- Ensure uniqueness
-  WHILE EXISTS (SELECT 1 FROM profiles WHERE pseudonym = new_pseudonym) LOOP
-    new_pseudonym := 'worker_' || substr(md5(random()::text), 1, 6);
+  WHILE EXISTS (SELECT 1 FROM public.profiles WHERE pseudonym = new_pseudonym) LOOP
+    chosen_prefix := prefixes[1 + floor(random() * array_length(prefixes, 1))::int];
+    hex_suffix := substr(md5(random()::text), 1, 6);
+    new_pseudonym := chosen_prefix || '_' || hex_suffix;
   END LOOP;
   RETURN new_pseudonym;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = '';
 
 -- Auto-create profile on signup
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO profiles (id, pseudonym)
-  VALUES (NEW.id, generate_pseudonym());
+  INSERT INTO public.profiles (id, pseudonym)
+  VALUES (NEW.id, public.generate_pseudonym());
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
@@ -128,7 +140,7 @@ BEGIN
   NEW.updated_at = now();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = '';
 
 CREATE TRIGGER profiles_updated_at
   BEFORE UPDATE ON profiles

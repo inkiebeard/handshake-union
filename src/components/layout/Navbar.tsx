@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { useProfile } from '../../hooks/useProfile';
 import { supabase } from '../../lib/supabase';
+import { PixelAvatar } from '../PixelAvatar';
 
 export function Navbar() {
   const { user } = useAuth();
+  const { profile } = useProfile(user?.id);
   const navigate = useNavigate();
   const [burgerActive, setBurgerActive] = useState(false);
 
@@ -14,13 +17,12 @@ export function Navbar() {
   };
 
   return (
-    <nav className="navbar is-dark" role="navigation" aria-label="main navigation">
+    <nav className="navbar term-nav" role="navigation" aria-label="main navigation">
       <div className="container">
         <div className="navbar-brand">
-          <Link className="navbar-item has-text-weight-bold is-size-5" to="/">
-            🤝 Handshake Union
+          <Link className="navbar-item brand" to="/">
+            handshake-union
           </Link>
-
           <button
             className={`navbar-burger ${burgerActive ? 'is-active' : ''}`}
             aria-label="menu"
@@ -38,31 +40,30 @@ export function Navbar() {
           {user ? (
             <>
               <div className="navbar-start">
-                <Link className="navbar-item" to="/chat">
-                  Chat
-                </Link>
-                <Link className="navbar-item" to="/stats">
-                  Stats
-                </Link>
-                <Link className="navbar-item" to="/onboarding">
-                  Profile
-                </Link>
+                <Link className="navbar-item" to="/chat">/chat</Link>
+                <Link className="navbar-item" to="/stats">/stats</Link>
+                <Link className="navbar-item" to="/members">/members</Link>
+                <Link className="navbar-item" to="/profile">/profile</Link>
               </div>
               <div className="navbar-end">
+                {profile && (
+                  <div className="navbar-item" style={{ gap: '0.5rem', display: 'flex', alignItems: 'center' }}>
+                    <PixelAvatar seed={profile.pseudonym} size={18} />
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                      {profile.pseudonym}
+                    </span>
+                  </div>
+                )}
                 <div className="navbar-item">
-                  <button className="button is-small is-outlined is-light" onClick={handleLogout}>
-                    Logout
+                  <button className="button is-ghost is-small" onClick={handleLogout}>
+                    logout
                   </button>
                 </div>
               </div>
             </>
           ) : (
             <div className="navbar-end">
-              <div className="navbar-item">
-                <Link className="button is-primary" to="/login">
-                  Join the Union
-                </Link>
-              </div>
+              <Link className="navbar-item" to="/login">/login</Link>
             </div>
           )}
         </div>
