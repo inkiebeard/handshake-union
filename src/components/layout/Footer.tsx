@@ -7,7 +7,7 @@ export function Footer() {
         <span>no tracking</span>
         {' · '}
         <a
-          href="https://github.com"
+          href="https://github.com/inkiebeard/handshake-union"
           target="_blank"
           rel="noopener noreferrer"
         >
