@@ -1,10 +1,12 @@
 -- ============================================
 -- Fix receipt hash: replace chr(0) separator
 -- ============================================
--- chr(0) is a null byte which PostgreSQL forbids in TEXT values.
+-- chr(0) is a null byte, which can cause issues when used in TEXT values
+-- and passed through certain operations or C-level functions. Using it as
+-- a separator made the resulting hash unusable in some contexts.
 -- Instead, hash each field independently to a fixed-length hex string,
--- then hash the concatenation. No separator needed — each component is
--- always exactly 64 hex chars, so there is no ambiguity or collision risk.
+-- then hash the concatenation. No separator is needed — each component is
+-- always exactly 64 hex chars, so the construction is unambiguous.
 --
 -- Hash scheme:
 --   SHA256( hex(SHA256(content)) || hex(SHA256(image_url)) )

@@ -9,9 +9,16 @@ function hasEmojiShortcodes(content: string): boolean {
   return SHORTCODE_REGEX.test(content);
 }
 
-const IMAGE_URL_REGEX = /^https:\/\/.+/i;
 function isValidImageUrl(url: string): boolean {
-  return IMAGE_URL_REGEX.test(url) && url.length <= 2048;
+  if (url.length > 2048) {
+    return false;
+  }
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 interface MessageInputProps {
