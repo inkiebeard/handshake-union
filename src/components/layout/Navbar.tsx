@@ -21,6 +21,7 @@ export function Navbar() {
       <div className="container">
         <div className="navbar-brand">
           <Link className="navbar-item brand" to="/">
+            <img src="/handshake-union-logo-trasnparent.png" alt="Handshake Union" className="navbar-logo" />
             handshake-union
           </Link>
           <button
