@@ -57,6 +57,10 @@ export function ReactionPicker({ onSelect }: ReactionPickerProps) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
+  // Set true for a short window after a touch inside the picker, so that
+  // any spurious scroll events on underlying containers are ignored.
+  const touchedInsideRef = useRef(false);
+  const touchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Get all emojis
   const allEmojis = useMemo(() => getAllEmojis(), []);
@@ -136,29 +140,63 @@ export function ReactionPicker({ onSelect }: ReactionPickerProps) {
     }
   };
 
-  // Close on click outside and on scroll (but not scroll inside picker)
+  // Close on click/tap outside and on scroll (but not scroll inside picker)
   useEffect(() => {
     if (!open) return;
 
+    // Desktop: mousedown outside closes picker
     const handleClickOutside = (e: MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
         setOpen(false);
       }
     };
 
-    const handleScroll = (e: Event) => {
-      // Don't close if scrolling inside the picker
+    // Mobile: touchstart outside closes picker (mousedown synthesis is unreliable on iOS)
+    const handleTouchOutside = (e: TouchEvent) => {
+      const target = e.target as Node;
+      if (
+        wrapperRef.current && !wrapperRef.current.contains(target) &&
+        pickerRef.current && !pickerRef.current.contains(target)
+      ) {
+        setOpen(false);
+      }
+    };
+
+    // Track when user touches inside the picker so the scroll handler can
+    // ignore spurious scroll events that iOS fires on underlying containers.
+    const handleTouchInsidePicker = (e: TouchEvent) => {
       if (pickerRef.current && pickerRef.current.contains(e.target as Node)) {
+        touchedInsideRef.current = true;
+        if (touchTimerRef.current) clearTimeout(touchTimerRef.current);
+        touchTimerRef.current = setTimeout(() => {
+          touchedInsideRef.current = false;
+        }, 600);
+      }
+    };
+
+    const handleScroll = (e: Event) => {
+      // Don't close if scrolling inside the picker itself
+      if (pickerRef.current && pickerRef.current.contains(e.target as Node)) {
+        return;
+      }
+      // Don't close if this scroll was triggered by touching inside the picker
+      // (iOS fires scroll events on underlying containers when tapping fixed overlays)
+      if (touchedInsideRef.current) {
         return;
       }
       setOpen(false);
     };
 
     document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleTouchOutside, { passive: true });
+    document.addEventListener('touchstart', handleTouchInsidePicker, { passive: true, capture: true });
     document.addEventListener('scroll', handleScroll, true);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleTouchOutside);
+      document.removeEventListener('touchstart', handleTouchInsidePicker, { capture: true });
       document.removeEventListener('scroll', handleScroll, true);
+      if (touchTimerRef.current) clearTimeout(touchTimerRef.current);
     };
   }, [open]);
 
@@ -216,6 +254,7 @@ export function ReactionPicker({ onSelect }: ReactionPickerProps) {
           style={style}
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
         >
           {/* Search */}
           <div className="reaction-picker-search">
