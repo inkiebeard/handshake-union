@@ -84,6 +84,7 @@ function MessageImage({ url, mode, onLoad }: { url: string; mode: ImageDisplayMo
             src={url}
             alt="attached image"
             className="chat-message-img"
+            referrerPolicy="no-referrer"
             loading="lazy"
             onLoad={onLoad}
             onError={() => setHasError(true)}
