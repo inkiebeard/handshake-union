@@ -1,3 +1,18 @@
+const ACCENT = { color: 'var(--accent)' } as const;
+const LINK = { color: 'var(--link)' } as const;
+
+function Arrow() {
+  return <span style={ACCENT}>→</span>;
+}
+
+function ExternalLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" style={LINK}>
+      {children}
+    </a>
+  );
+}
+
 export function Privacy() {
   return (
     <section className="section">
@@ -11,139 +26,178 @@ export function Privacy() {
             <hr className="term-divider" />
 
             <p>
-              handshake union does not run its own analytics, does not set tracking cookies,
-              and does not sell or share user data. pseudonyms are auto-assigned and no real
-              identity is stored by this application.
+              handshake union does not run its own analytics, does not set first-party
+              tracking cookies, and does not sell or share user data. pseudonyms are
+              auto-assigned — no real name is stored or required. the sections below
+              document every third-party service this application connects to, what data
+              each service receives, and what it does with it.
             </p>
 
             <br />
-
             <p className="comment">third-party services in use:</p>
-
             <br />
 
-            {/* Cloudflare */}
+            {/* ── CLOUDFLARE ───────────────────────────────────────────────── */}
             <p className="prompt">cloudflare</p>
             <p>
-              This site is served through{' '}
-              <a
-                href="https://www.cloudflare.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: 'var(--link)' }}
-              >
-                Cloudflare
-              </a>{' '}
-              (CDN, DDoS protection, and edge workers). As a network intermediary, Cloudflare
-              may process request metadata such as IP addresses and user-agent strings in order
-              to route traffic and protect against abuse. This processing is governed by
-              Cloudflare's own privacy policy. This site does not enable Cloudflare Web
-              Analytics or any Cloudflare tracking beacons.
+              The entire application is served through{' '}
+              <ExternalLink href="https://www.cloudflare.com">Cloudflare</ExternalLink>
+              's network (CDN, DDoS protection, and Cloudflare Workers edge compute).
+              Every HTTP request your browser makes to this site passes through Cloudflare
+              before reaching our infrastructure. As a network intermediary Cloudflare
+              necessarily processes the following data:
+            </p>
+            <br />
+            <p className="comment">data cloudflare receives on each request:</p>
+            <p><Arrow /> IP address — used for routing, DDoS mitigation, and abuse detection</p>
+            <p><Arrow /> HTTP request metadata — URL path, method, headers (user-agent, referer, accept-language), timestamps</p>
+            <p><Arrow /> TLS handshake data — Cloudflare terminates TLS at the edge; payload content transits their infrastructure</p>
+            <p><Arrow /> Geographic region inferred from IP — used for routing to the nearest edge node</p>
+            <p><Arrow /> Network Data — Cloudflare generates aggregated, non-personal threat intelligence from traffic patterns (error rates, cache rates, IP reputation scores)</p>
+            <br />
+            <p className="comment">what is NOT enabled on this site:</p>
+            <p><Arrow /> Cloudflare Web Analytics (no analytics beacon injected into pages)</p>
+            <p><Arrow /> Cloudflare Browser Insights (no performance monitoring beacon)</p>
+            <p><Arrow /> Cloudflare Zaraz (no tag manager)</p>
+            <p><Arrow /> Cloudflare Turnstile or CAPTCHA</p>
+            <br />
+            <p>
+              Cloudflare commits in its privacy policy not to sell personal data and not
+              to use End User data for its own marketing. Cloudflare is certified under
+              the EU-U.S. Data Privacy Framework, the UK Extension, and the Swiss-U.S.
+              DPF, providing transfer safeguards for EU/UK/Swiss residents.
             </p>
             <br />
             <p>
-              <span className="comment">what Cloudflare may collect:</span>
-            </p>
-            <p><span style={{ color: 'var(--accent)' }}>→</span> IP address (for routing and abuse protection)</p>
-            <p><span style={{ color: 'var(--accent)' }}>→</span> HTTP request metadata (user-agent, referrer, timestamps)</p>
-            <p><span style={{ color: 'var(--accent)' }}>→</span> this data is retained and processed by Cloudflare, not by us</p>
-            <br />
-            <p>
-              <a
-                href="https://www.cloudflare.com/privacypolicy/"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: 'var(--link)' }}
-              >
+              <ExternalLink href="https://www.cloudflare.com/privacypolicy/">
                 Cloudflare privacy policy →
-              </a>
+              </ExternalLink>
             </p>
 
             <hr className="term-divider" />
 
-            {/* GIPHY */}
+            {/* ── GIPHY ────────────────────────────────────────────────────── */}
             <p className="prompt">GIPHY</p>
             <p>
               The GIF picker is powered by{' '}
-              <a
-                href="https://giphy.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: 'var(--link)' }}
-              >
-                GIPHY
-              </a>
-              . When you open the GIF picker, search for GIFs, or send a GIF in a message,
-              requests are made directly from your browser to the GIPHY API. GIPHY's analytics
-              endpoints are called to register the following events:
+              <ExternalLink href="https://giphy.com">GIPHY</ExternalLink>{' '}
+              (owned by Shutterstock, Inc. since 2023). All API requests are made
+              directly from your browser to GIPHY's servers — they do not pass through
+              our backend. This means <strong>your IP address is visible to GIPHY</strong>{' '}
+              every time you interact with the GIF picker.
             </p>
             <br />
-            <p><span style={{ color: 'var(--accent)' }}>→</span> <strong>view</strong> — when a GIF loads in the search grid</p>
-            <p><span style={{ color: 'var(--accent)' }}>→</span> <strong>click</strong> — when you select a GIF from the grid</p>
-            <p><span style={{ color: 'var(--accent)' }}>→</span> <strong>sent</strong> — when a message containing a GIF is successfully delivered</p>
+            <p className="comment">when your browser contacts giphy directly:</p>
+            <p><Arrow /> <strong>opening the picker</strong> — trending GIFs are fetched; GIPHY receives your IP, user-agent, and a session random ID</p>
+            <p><Arrow /> <strong>searching</strong> — your search query is sent to GIPHY's search API along with your IP and random ID</p>
+            <p><Arrow /> <strong>loading GIF previews</strong> — images load from GIPHY's CDN domains (media0.giphy.com etc.), exposing your IP to GIPHY's CDN</p>
+            <p><Arrow /> <strong>analytics pingbacks</strong> — three fire-and-forget GET requests to GIPHY's analytics endpoint:</p>
+            <p style={{ paddingLeft: '1.5rem' }}><Arrow /> <strong>onload</strong> — when a GIF becomes visible in the grid</p>
+            <p style={{ paddingLeft: '1.5rem' }}><Arrow /> <strong>onclick</strong> — when you tap/click a GIF to select it</p>
+            <p style={{ paddingLeft: '1.5rem' }}><Arrow /> <strong>onsent</strong> — after a message containing a GIF is successfully delivered</p>
+            <br />
+            <p className="comment">what each analytics pingback includes:</p>
+            <p><Arrow /> an encoded analytics payload provided by GIPHY identifying the GIF and interaction type</p>
+            <p><Arrow /> a Unix timestamp (<code>ts</code>) of when the event occurred</p>
+            <p><Arrow /> a session-scoped random ID (<code>random_id</code>) fetched from GIPHY's Random ID endpoint at page load — this is not linked to your pseudonym or any personal identity, and resets each page load</p>
+            <p><Arrow /> your IP address (implicit in the HTTP request)</p>
+            <br />
+            <p className="comment">additional giphy data practices to be aware of:</p>
+            <p><Arrow /> GIPHY automatically collects IP address, device ID, and cookie information on API interactions per their policy</p>
+            <p><Arrow /> GIPHY uses Google Analytics on their own platform</p>
+            <p><Arrow /> GIPHY uses web beacons and advertising technologies and may serve targeted ads based on usage patterns</p>
+            <p><Arrow /> GIPHY explicitly states it does not honour browser "Do Not Track" signals</p>
+            <p><Arrow /> GIPHY retains personal data for as long as necessary per their policy; some aggregate data is retained indefinitely</p>
             <br />
             <p>
-              These pingbacks are used by GIPHY to improve search relevance. A session-scoped
-              random ID (fetched from GIPHY's Random ID endpoint) is included with API requests
-              as a privacy-safe proxy — it is not linked to your pseudonym or any personal
-              identity, and a new one is generated each page load. No GIF picker data is stored
-              by handshake union.
+              handshake union does not store which GIFs you searched for or viewed.
+              only the final GIF URL included in a sent message is persisted (in Supabase,
+              see below), subject to the same 6-hour expiry as all messages.
             </p>
             <br />
             <p>
-              <a
-                href="https://support.giphy.com/hc/en-us/articles/360032872931-GIPHY-Privacy-Policy"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: 'var(--link)' }}
-              >
+              <ExternalLink href="https://giphy.com/privacy">
                 GIPHY privacy policy →
-              </a>
+              </ExternalLink>
             </p>
 
             <hr className="term-divider" />
 
-            {/* Supabase */}
+            {/* ── SUPABASE ─────────────────────────────────────────────────── */}
             <p className="prompt">supabase</p>
             <p>
-              Authentication and message storage are provided by{' '}
-              <a
-                href="https://supabase.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: 'var(--link)' }}
-              >
-                Supabase
-              </a>
-              . Supabase processes authentication tokens and stores ephemeral messages
-              (auto-deleted after 6 hours). No real names or identifying information are
-              required or stored — only your auto-assigned pseudonym and anonymised profile ID.
+              Authentication, message storage, and real-time delivery are provided by{' '}
+              <ExternalLink href="https://supabase.com">Supabase</ExternalLink>.
+              Supabase acts as a <strong>data processor</strong> on our behalf under its
+              Data Processing Addendum (DPA), hosting our project on Amazon Web Services
+              infrastructure. The data Supabase processes is governed by our instructions
+              and their DPA.
+            </p>
+            <br />
+
+            <p className="comment">authentication</p>
+            <p>
+              Three sign-in methods are offered. Each involves different data flows:
+            </p>
+            <br />
+            <p><Arrow /> <strong>email magic link</strong> — your email address is sent to Supabase Auth, which stores it and uses it to send a one-time login link via a transactional email service. your email is associated with your account in Supabase's database.</p>
+            <p><Arrow /> <strong>github oauth</strong> — you are redirected to GitHub to authenticate. GitHub shares a subset of your GitHub profile (email address, GitHub username, avatar URL, provider user ID) with Supabase. this is subject to{' '}
+              <ExternalLink href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy policy</ExternalLink>.
+            </p>
+            <p><Arrow /> <strong>gitlab oauth</strong> — same as above, via{' '}
+              <ExternalLink href="https://about.gitlab.com/privacy/">GitLab</ExternalLink>.
             </p>
             <br />
             <p>
-              <a
-                href="https://supabase.com/privacy"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: 'var(--link)' }}
-              >
+              in all cases, a pseudonym is auto-assigned and your real identity is never
+              displayed to other users. auth session tokens (JWTs) are stored in your
+              browser's local storage by Supabase's client library.
+            </p>
+            <br />
+
+            <p className="comment">message storage</p>
+            <p><Arrow /> message content, room, timestamp, your profile ID, and any attached image URL are stored in Supabase's PostgreSQL database</p>
+            <p><Arrow /> all messages are automatically deleted after 6 hours via a server-side expiry job</p>
+            <p><Arrow /> reply relationships and reactions are stored and expire with the associated messages</p>
+            <br />
+
+            <p className="comment">realtime</p>
+            <p><Arrow /> your browser maintains a persistent WebSocket connection to Supabase Realtime for live message delivery</p>
+            <p><Arrow /> Supabase Realtime logs connection metadata (IP, connection duration) at the infrastructure level for operational purposes</p>
+            <br />
+
+            <p className="comment">supabase platform observability</p>
+            <p><Arrow /> Supabase logs database query metadata, API request logs, and connection events as part of normal platform operations</p>
+            <p><Arrow /> these logs are used for debugging, security monitoring, and service reliability — not for advertising</p>
+            <p><Arrow /> data is hosted on AWS in the region configured for this project</p>
+            <p><Arrow /> Supabase may share data with its sub-processors (AWS, Google Cloud, Stripe, Hubspot, and others listed in their DPA) where necessary to operate the platform</p>
+            <br />
+            <p>
+              <ExternalLink href="https://supabase.com/privacy">
                 Supabase privacy policy →
-              </a>
+              </ExternalLink>
+              {' · '}
+              <ExternalLink href="https://supabase.com/legal/dpa">
+                Supabase DPA →
+              </ExternalLink>
             </p>
 
             <hr className="term-divider" />
 
+            <p className="comment">your rights</p>
+            <p>
+              if you want your account and messages deleted, contact us via the GitHub
+              repository. messages expire automatically after 6 hours. to exercise rights
+              over data held by Cloudflare, GIPHY, or Supabase directly, contact those
+              services using the links above.
+            </p>
+            <br />
             <p className="comment">questions?</p>
             <p>
-              this project is open source.{' '}
-              <a
-                href="https://github.com/inkiebeard/handshake-union"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: 'var(--link)' }}
-              >
+              this project is open source — you can verify every data flow described here.{' '}
+              <ExternalLink href="https://github.com/inkiebeard/handshake-union">
                 read the source →
-              </a>
+              </ExternalLink>
             </p>
 
           </div>
