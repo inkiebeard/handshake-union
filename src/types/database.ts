@@ -91,7 +91,8 @@ export interface Message {
   id: string;
   room: ChatRoom;
   profile_id: string;
-  content: string;
+  content: string | null;
+  image_url: string | null;
   created_at: string;
   reply_to_id: string | null;
   // Joined fields
@@ -142,7 +143,8 @@ export interface ModerationReport {
   receipt_id: string;
   reporter_id: string;
   reason: string | null;
-  message_content: string;
+  message_content: string | null;
+  message_image_url: string | null;
   message_author_id: string;
   message_room: ChatRoom;
   message_created_at: string;

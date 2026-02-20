@@ -4,14 +4,18 @@ import { EmojiText } from '../../lib/emoji';
 import type { Emoji } from '../../lib/emoji';
 import type { Message } from '../../types/database';
 
-// Check if content has any emoji shortcodes
 const SHORTCODE_REGEX = /:([a-zA-Z0-9_+-]+):/;
 function hasEmojiShortcodes(content: string): boolean {
   return SHORTCODE_REGEX.test(content);
 }
 
+const IMAGE_URL_REGEX = /^https:\/\/.+/i;
+function isValidImageUrl(url: string): boolean {
+  return IMAGE_URL_REGEX.test(url) && url.length <= 2048;
+}
+
 interface MessageInputProps {
-  onSend: (content: string, replyToId?: string) => Promise<void>;
+  onSend: (content: string, imageUrl?: string | null, replyToId?: string) => Promise<void>;
   replyTo: Message | null;
   onCancelReply: () => void;
   disabled?: boolean;
@@ -24,45 +28,52 @@ export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: Messa
   const [error, setError] = useState<string | null>(null);
   const [autocompleteEnabled, setAutocompleteEnabled] = useState(true);
   const [hasAutocompleteResults, setHasAutocompleteResults] = useState(false);
+  const [showImageInput, setShowImageInput] = useState(false);
+  const [imageUrl, setImageUrl] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  const imageUrlTrimmed = imageUrl.trim();
+  const hasImage = imageUrlTrimmed.length > 0;
+  const imageUrlInvalid = hasImage && !isValidImageUrl(imageUrlTrimmed);
+
+  const hasContent = content.trim().length > 0;
+  const canSend = (hasContent || (hasImage && !imageUrlInvalid)) && !imageUrlInvalid;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmed = content.trim();
-    if (!trimmed || sending || disabled) return;
+    if (!canSend || sending || disabled) return;
 
     setSending(true);
     setError(null);
 
     try {
-      await onSend(trimmed, replyTo?.id);
+      await onSend(content, hasImage ? imageUrlTrimmed : null, replyTo?.id);
       setContent('');
+      setImageUrl('');
+      setShowImageInput(false);
       onCancelReply();
-      inputRef.current?.focus();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send');
     } finally {
       setSending(false);
+      // Defer focus until after the re-render that re-enables the textarea
+      requestAnimationFrame(() => inputRef.current?.focus());
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // When autocomplete has results, let it handle navigation keys
     if (hasAutocompleteResults) {
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Tab') {
-        // These are handled by autocomplete
         return;
       }
       if (e.key === 'Enter' && !e.shiftKey) {
-        // Enter selects emoji when autocomplete is showing
         return;
       }
       if (e.key === 'Escape') {
-        // Escape closes autocomplete
         return;
       }
     }
-    
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
@@ -80,15 +91,13 @@ export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: Messa
 
   const handleEmojiSelect = useCallback(
     (emoji: Emoji, startIndex: number, endIndex: number) => {
-      // Replace the :query with :code: (completed shortcode)
       const before = content.slice(0, startIndex);
       const after = content.slice(endIndex);
       const newContent = `${before}:${emoji.code}:${after}`;
-      
+
       setContent(newContent);
-      
-      // Move cursor to after the inserted emoji
-      const newCursorPos = startIndex + emoji.code.length + 2; // +2 for the colons
+
+      const newCursorPos = startIndex + emoji.code.length + 2;
       setTimeout(() => {
         if (inputRef.current) {
           inputRef.current.selectionStart = newCursorPos;
@@ -104,13 +113,19 @@ export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: Messa
   const handleAutocompleteClose = useCallback(() => {
     setAutocompleteEnabled(false);
     setHasAutocompleteResults(false);
-    // Re-enable after a short delay to allow new typing
     setTimeout(() => setAutocompleteEnabled(true), 100);
   }, []);
 
   const handleAutocompleteResultsChange = useCallback((hasResults: boolean) => {
     setHasAutocompleteResults(hasResults);
   }, []);
+
+  const handleToggleImageInput = () => {
+    setShowImageInput((prev) => {
+      if (prev) setImageUrl('');
+      return !prev;
+    });
+  };
 
   const charCount = content.length;
   const isOverLimit = charCount > 2000;
@@ -144,7 +159,33 @@ export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: Messa
         </div>
       )}
 
+      {/* Image URL input */}
+      {showImageInput && (
+        <div className="chat-image-url-bar">
+          <input
+            type="url"
+            className={`chat-image-url-input${imageUrlInvalid ? ' is-invalid' : ''}`}
+            placeholder="image url (https://...)"
+            value={imageUrl}
+            onChange={(e) => setImageUrl(e.target.value)}
+            disabled={disabled || sending}
+          />
+          {imageUrlInvalid && (
+            <span className="chat-image-url-error">must be a valid https:// url</span>
+          )}
+        </div>
+      )}
+
       <div className="chat-input-row">
+        <button
+          type="button"
+          className={`chat-image-toggle-btn${showImageInput ? ' is-active' : ''}`}
+          onClick={handleToggleImageInput}
+          title={showImageInput ? 'Remove image' : 'Attach image URL'}
+          disabled={disabled || sending}
+        >
+          &#128248;
+        </button>
         <div className="chat-textarea-wrapper">
           <textarea
             ref={inputRef}
@@ -177,7 +218,7 @@ export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: Messa
         <button
           type="submit"
           className="chat-send-btn"
-          disabled={!content.trim() || isOverLimit || sending || disabled}
+          disabled={!canSend || isOverLimit || sending || disabled}
           title="Send (Enter)"
         >
           {sending ? '...' : '>'}

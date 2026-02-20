@@ -11,7 +11,7 @@ interface ChatContextValue {
   currentRoom: ChatRoom | null;
   joinRoom: (room: ChatRoom) => void;
   leaveRoom: (room: ChatRoom) => void;
-  sendMessage: (content: string, replyToId?: string) => Promise<void>;
+  sendMessage: (content: string, imageUrl?: string | null, replyToId?: string) => Promise<void>;
   deleteMessage: (id: string) => Promise<void>;
   reportMessage: (id: string, reason?: string) => Promise<string>;
   toggleReaction: (messageId: string, emoji: string) => Promise<void>;
@@ -217,19 +217,25 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
 
   // Send message
   const sendMessage = useCallback(
-    async (content: string, replyToId?: string) => {
+    async (content: string, imageUrl?: string | null, replyToId?: string) => {
       if (!userId) throw new Error('Not authenticated');
       if (!currentRoom) throw new Error('Not in a room');
 
-      const trimmed = content.trim();
-      if (!trimmed || trimmed.length > 2000) {
-        throw new Error('Message must be 1-2000 characters');
+      const trimmedContent = content.trim() || null;
+      const trimmedImageUrl = imageUrl?.trim() || null;
+
+      if (!trimmedContent && !trimmedImageUrl) {
+        throw new Error('Message must have content or an image');
+      }
+      if (trimmedContent && trimmedContent.length > 2000) {
+        throw new Error('Message content must be 2000 characters or fewer');
       }
 
       const { error: insertError } = await supabase.from('messages').insert({
         room: currentRoom,
         profile_id: userId,
-        content: trimmed,
+        content: trimmedContent,
+        image_url: trimmedImageUrl,
         reply_to_id: replyToId ?? null,
       });
 

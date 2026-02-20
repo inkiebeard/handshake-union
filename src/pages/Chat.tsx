@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useChat } from '../contexts/ChatContext';
+import { useImageDisplayMode } from '../hooks/useImageDisplayMode';
 import { MessageList } from '../components/chat/MessageList';
 import { MessageInput } from '../components/chat/MessageInput';
 import { CHAT_ROOMS } from '../lib/constants';
@@ -11,6 +12,7 @@ export function Chat() {
   const [activeRoom, setActiveRoom] = useState<ChatRoom>('general');
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [reportFeedback, setReportFeedback] = useState<string | null>(null);
+  const { mode: imageDisplayMode, toggle: toggleImageMode } = useImageDisplayMode();
 
   const {
     messages,
@@ -112,7 +114,17 @@ export function Chat() {
     <section className="section chat-section">
       <div className="container">
         <div className="chat-header">
-          <p className="prompt">chat</p>
+          <div className="chat-header-top">
+            <p className="prompt">chat</p>
+            <button
+              type="button"
+              className={`chat-image-mode-btn${imageDisplayMode === 'full' ? ' is-active' : ''}`}
+              onClick={toggleImageMode}
+              title={imageDisplayMode === 'blurred' ? 'Images are blurred — click to show all' : 'Images are visible — click to blur all'}
+            >
+              &#128248; images: {imageDisplayMode === 'blurred' ? 'blurred' : 'visible'}
+            </button>
+          </div>
           <p className="comment">ephemeral rooms — messages expire after 1 hour</p>
         </div>
 
@@ -151,6 +163,7 @@ export function Chat() {
             currentUserId={user?.id}
             reactions={reactions}
             loading={loading}
+            imageDisplayMode={imageDisplayMode}
             onReply={handleReply}
             onDelete={handleDelete}
             onReport={handleReport}
