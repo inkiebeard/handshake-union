@@ -125,7 +125,7 @@ export function Chat() {
               &#128248; images: {imageDisplayMode === 'blurred' ? 'blurred' : 'visible'}
             </button>
           </div>
-          <p className="comment">ephemeral rooms — messages expire after 1 hour</p>
+          <p className="comment">ephemeral rooms — messages expire after 6 hours</p>
         </div>
 
         {/* Room tabs */}

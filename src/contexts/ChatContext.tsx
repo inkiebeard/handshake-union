@@ -67,13 +67,13 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
     setLoading(true);
     setError(null);
 
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
 
     const { data, error: fetchError } = await supabase
       .from('messages')
       .select('*')
       .eq('room', room)
-      .gte('created_at', oneHourAgo)
+      .gte('created_at', sixHoursAgo)
       .order('created_at', { ascending: true });
 
     if (fetchError) {
@@ -209,8 +209,8 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
   // Prune expired messages every 30 seconds
   useEffect(() => {
     const interval = setInterval(() => {
-      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-      setMessages((prev) => prev.filter((m) => m.created_at >= oneHourAgo));
+      const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+      setMessages((prev) => prev.filter((m) => m.created_at >= sixHoursAgo));
     }, 30_000);
     return () => clearInterval(interval);
   }, []);

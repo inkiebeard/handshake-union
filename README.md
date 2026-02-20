@@ -18,10 +18,11 @@ Handshake Union is a refuge. A place to compare notes, vent, and to go back to t
 
 ## What it does
 
-- **Anonymous chat** — three rooms (`#general`, `#memes`, `#whinge`) with 1-hour ephemeral messages. No logs, just anonymous cryptographic receipts of message integrity. Receipts help to prove or disprove a message existed (or didn't) without retaining it. Receipts are also used to report messages that violate the code of conduct.
+- **Anonymous chat** — three rooms (`#general`, `#memes`, `#whinge`) with 6-hour ephemeral messages. Supports image attachments (blur-by-default), emoji reactions, custom emotes, and reply threading. No logs, just anonymous cryptographic receipts of message integrity. Receipts help to prove or disprove a message existed (or didn't) without retaining it. Receipts are also used to report messages that violate the code of conduct.
 - **Salary & conditions data** — share your band, role, experience, WFH status and employment type. All optional. All aggregate-only — no individual data is ever exposed.
 - **Stats dashboard** — see salary distributions, role breakdowns, WFH trends, and compare against industry baselines. Salary data hidden until we have enough members to protect privacy (n≥30).
 - **Pseudonymous identity** — you're auto-assigned a pseudonym like `worker_a7f3b2`. You can rename it. Nobody knows who you really are (unless you want to tell them).
+- **Members directory** — public-safe member stats (pseudonym, tenure, message count, profile completeness). No salary or conditions data exposed.
 
 ---
 
@@ -31,7 +32,7 @@ Handshake Union is a refuge. A place to compare notes, vent, and to go back to t
 
 **Collective knowledge is the counter.** When enough people share what they're paid and how they're treated, patterns emerge. That information belongs to the community that created (and lives by) it.
 
-**Privacy is non-negotiable.** We don't want your real name. We can't correlate your pseudonym to your identity. Stats are aggregate-only with sample size guards. Messages are deleted after an hour. The platform is open source and auditable.
+**Privacy is non-negotiable.** We don't want your real name. We can't correlate your pseudonym to your identity. Stats are aggregate-only with sample size guards. Messages are deleted after 6 hours. The platform is open source and auditable.
 
 **No engagement hacking.** No likes on profiles, no follower counts, no algorithmic amplification. Just people talking.
 
@@ -72,7 +73,7 @@ The baseline data seeded in the platform is derived from these sources and refle
 
 - Node.js 22+
 - A [Supabase](https://supabase.com) project (free tier works)
-- A [Cloudflare](https://cloudflare.com) account
+- A [Cloudflare](https://cloudflare.com) account (for deployment only — not needed for local dev)
 
 ### Setup
 
@@ -116,9 +117,15 @@ supabase/migrations/
   014_seed_baseline_stats.sql
   015_enable_cron_cleanup.sql
   016_public_member_stats.sql
+  017_messages_image_url.sql
+  018_image_url_integrity.sql
+  019_fix_digest_search_path.sql
+  020_fix_receipt_hash_separator.sql
+  021_fix_verify_functions_hash.sql
+  022_update_message_retention_6h.sql
 ```
 
-For message cleanup (1-hour TTL), you'll need to activate `pg_cron` in your Supabase project and run the cron setup from migration 015.
+For message cleanup (6-hour TTL), you'll need to activate `pg_cron` in your Supabase project (Database → Extensions → pg_cron) and run the cron setup from migration 015, then apply migration 022 to set the correct retention interval.
 
 ### Start the dev server
 
@@ -134,7 +141,7 @@ npm run dev
 - **Pseudonymous by default** — real identity is never stored or exposed
 - **Row Level Security** — all data access enforced at the database level
 - **Profiles are private** — users can only read their own profile row; stats are exposed via aggregate functions only
-- **Ephemeral messages** — deleted after 1 hour
+- **Ephemeral messages** — deleted after 6 hours
 - **Cryptographic receipts** — SHA-256 hash of every message stored automatically. No readable content, invisible to all user-facing roles. Enables tamper-evident screenshot verification without retaining message content.
 - **Moderation reports** — machine-copy content from the database (never user-provided), linked to receipts for tamper-evident verification, hard-deleted after 30 days
 - **Search path hardened** — all DB functions use `SET search_path = ''`
