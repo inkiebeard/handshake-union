@@ -61,23 +61,34 @@ function ReactionDisplay({ code }: { code: string }) {
 
 function MessageImage({ url, mode, onLoad }: { url: string; mode: ImageDisplayMode; onLoad: () => void }) {
   const [manuallyRevealed, setManuallyRevealed] = useState(false);
+  const [hasError, setHasError] = useState(false);
   const isRevealed = mode === "full" || manuallyRevealed;
 
   // Reset per-image reveal when global mode switches back to blurred
   useEffect(() => {
-    if (mode === "blurred") setManuallyRevealed(false);
+    if (mode === "blurred") {
+      setManuallyRevealed(false);
+      setHasError(false);
+    }
   }, [mode]);
 
   return (
     <div className={`chat-message-image${isRevealed ? " is-revealed" : ""}`}>
       {isRevealed ? (
-        <img
-          src={url}
-          alt="attached image"
-          className="chat-message-img"
-          loading="lazy"
-          onLoad={onLoad}
-        />
+        hasError ? (
+          <div className="chat-message-image-error">
+            ⚠ could not load image
+          </div>
+        ) : (
+          <img
+            src={url}
+            alt="attached image"
+            className="chat-message-img"
+            loading="lazy"
+            onLoad={onLoad}
+            onError={() => setHasError(true)}
+          />
+        )
       ) : (
         <button
           type="button"

@@ -36,6 +36,8 @@ export function MessageList({
   onReaction,
 }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const observerRef = useRef<ResizeObserver | null>(null);
   const isNearBottomRef = useRef(true);
   const [showNewMessages, setShowNewMessages] = useState(false);
 
@@ -88,26 +90,27 @@ export function MessageList({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
 
-  // Re-scroll when content height grows (e.g. images finishing loading) while tracking bottom
+  // Single long-lived ResizeObserver on the inner wrapper.
+  // Fires whenever any child (message, image, etc.) changes height — no need
+  // to reconnect on every messages.length change.
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
+    const inner = innerRef.current;
+    if (!inner) return;
 
-    const observer = new ResizeObserver(() => {
+    observerRef.current = new ResizeObserver(() => {
       if (isNearBottomRef.current) {
-        el.scrollTop = el.scrollHeight;
+        const el = containerRef.current;
+        if (el) el.scrollTop = el.scrollHeight;
       }
     });
 
-    // Observe the inner scroll content so any height change (image load, etc.) triggers a re-scroll
-    for (const child of Array.from(el.children)) {
-      observer.observe(child);
-    }
-    // Also observe the container itself
-    observer.observe(el);
+    observerRef.current.observe(inner);
 
-    return () => observer.disconnect();
-  }, [messages.length]);
+    return () => {
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+    };
+  }, []); // mount/unmount only
 
   // Build a lookup for reply targets
   const messageMap = new Map(messages.map((m) => [m.id, m]));
@@ -135,6 +138,7 @@ export function MessageList({
   return (
     <div className="chat-message-list-wrapper">
       <div className="chat-message-list" ref={containerRef} onScroll={handleScroll}>
+        <div ref={innerRef}>
         {messages.map((msg) => (
           <MessageErrorBoundary key={msg.id} messageId={msg.id}>
             <Message
@@ -151,6 +155,7 @@ export function MessageList({
             />
           </MessageErrorBoundary>
         ))}
+        </div>
       </div>
 
       {showNewMessages && (
