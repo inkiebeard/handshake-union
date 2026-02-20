@@ -55,14 +55,14 @@ interface GiphyPickerProps {
 type RawImages = Record<string, { url?: string; webp?: string; width?: string; height?: string; mp4?: string }>;
 type RawAnalytics = { onload?: { url?: string }; onclick?: { url?: string }; onsent?: { url?: string } };
 
-async function fetchGifs(searchQuery: string): Promise<GiphyGif[]> {
+async function fetchGifs(searchQuery: string, signal?: AbortSignal): Promise<GiphyGif[]> {
   const randomId = await ensureRandomId();
   const base = searchQuery.trim()
     ? `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(searchQuery)}&limit=18&rating=pg-13&lang=en`
     : `https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_API_KEY}&limit=18&rating=pg-13`;
 
   const endpoint = randomId ? `${base}&random_id=${randomId}` : base;
-  const res = await fetch(endpoint);
+  const res = await fetch(endpoint, { signal });
   if (!res.ok) throw new Error('giphy request failed');
   const data = await res.json();
 
@@ -97,17 +97,25 @@ export function GiphyPicker({ onSelect, onClose }: GiphyPickerProps) {
   const [error, setError] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const load = useCallback(async (q: string) => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = new AbortController();
+    const { signal } = abortControllerRef.current;
     setLoading(true);
     setError(null);
     try {
-      const results = await fetchGifs(q);
+      const results = await fetchGifs(q, signal);
       setGifs(results);
-    } catch {
-      setError('failed to load GIFs');
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        setError('failed to load GIFs');
+      }
     } finally {
-      setLoading(false);
+      if (!signal.aborted) {
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -123,6 +131,13 @@ export function GiphyPicker({ onSelect, onClose }: GiphyPickerProps) {
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, [onClose]);
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      abortControllerRef.current?.abort();
+    };
+  }, []);
 
   const handleQueryChange = (value: string) => {
     setQuery(value);
