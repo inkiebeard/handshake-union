@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { EmojiAutocomplete } from './EmojiAutocomplete';
+import { GiphyPicker, fireGiphyAnalytics } from './GiphyPicker';
 import { EmojiText } from '../../lib/emoji';
 import type { Emoji } from '../../lib/emoji';
 import type { Message } from '../../types/database';
@@ -36,7 +37,9 @@ export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: Messa
   const [autocompleteEnabled, setAutocompleteEnabled] = useState(true);
   const [hasAutocompleteResults, setHasAutocompleteResults] = useState(false);
   const [showImageInput, setShowImageInput] = useState(false);
+  const [showGiphyPicker, setShowGiphyPicker] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
+  const [gifOnsentUrl, setGifOnsentUrl] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const imageUrlTrimmed = imageUrl.trim();
@@ -55,6 +58,11 @@ export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: Messa
 
     try {
       await onSend(content, hasImage ? imageUrlTrimmed : null, replyTo?.id);
+      // Fire onsent analytics after the message actually delivers
+      if (gifOnsentUrl) {
+        fireGiphyAnalytics(gifOnsentUrl);
+        setGifOnsentUrl('');
+      }
       setContent('');
       setImageUrl('');
       setShowImageInput(false);
@@ -128,10 +136,26 @@ export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: Messa
   }, []);
 
   const handleToggleImageInput = () => {
+    setShowGiphyPicker(false);
     setShowImageInput((prev) => {
-      if (prev) setImageUrl('');
+      if (prev) {
+        setImageUrl('');
+        setGifOnsentUrl('');
+      }
       return !prev;
     });
+  };
+
+  const handleToggleGiphyPicker = () => {
+    setShowImageInput(false);
+    setShowGiphyPicker((prev) => !prev);
+  };
+
+  const handleGifSelect = (url: string, onsentUrl: string) => {
+    setImageUrl(url);
+    setGifOnsentUrl(onsentUrl);
+    setShowImageInput(true);
+    setShowGiphyPicker(false);
   };
 
   const charCount = content.length;
@@ -166,6 +190,14 @@ export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: Messa
         </div>
       )}
 
+      {/* Giphy picker */}
+      {showGiphyPicker && (
+        <GiphyPicker
+          onSelect={handleGifSelect}
+          onClose={() => setShowGiphyPicker(false)}
+        />
+      )}
+
       {/* Image URL input */}
       {showImageInput && (
         <div className="chat-image-url-bar">
@@ -192,6 +224,15 @@ export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: Messa
           disabled={disabled || sending}
         >
           &#128248;
+        </button>
+        <button
+          type="button"
+          className={`chat-image-toggle-btn${showGiphyPicker ? ' is-active' : ''}`}
+          onClick={handleToggleGiphyPicker}
+          title={showGiphyPicker ? 'Close GIF picker' : 'Search GIFs'}
+          disabled={disabled || sending}
+        >
+          GIF
         </button>
         <div className="chat-textarea-wrapper">
           <textarea

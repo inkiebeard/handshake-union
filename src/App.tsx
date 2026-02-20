@@ -12,6 +12,7 @@ import { Onboarding } from './pages/Onboarding';
 import { Profile } from './pages/Profile';
 import { Stats } from './pages/Stats';
 import { Members } from './pages/Members';
+import { Privacy } from './pages/Privacy';
 
 function AppRoutes() {
   const { user } = useAuth();
@@ -21,6 +22,7 @@ function AppRoutes() {
       <Routes>
         <Route element={<Layout />}>
           <Route path="/" element={<Home />} />
+          <Route path="/privacy" element={<Privacy />} />
           <Route path="/login" element={<Login />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route

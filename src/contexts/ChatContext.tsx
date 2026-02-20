@@ -105,10 +105,8 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
   }, []);
 
   // Leave current room (unsubscribe)
-  const leaveRoom = useCallback((room?: ChatRoom) => {
-    console.log('Leaving room:', room);
-    
-    if (channelRef.current && (room === undefined || channelRef.current.subTopic !== `room:${room}`)) {
+  const leaveRoom = useCallback((_room?: ChatRoom) => {
+    if (channelRef.current) {
       supabase.removeChannel(channelRef.current);
       channelRef.current = null;
     }
@@ -120,9 +118,14 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
 
   // Join a chat room (subscribe to realtime via broadcast)
   const joinRoom = useCallback((room: ChatRoom) => {
-    console.log('Joining room:', room);
-    
-    channelRef.current && room !== (channelRef.current.subTopic?.replace('room:', '') as ChatRoom) && leaveRoom(channelRef.current.subTopic?.replace('room:', '') as ChatRoom);
+    // If already subscribed to this exact room, do nothing
+    if (channelRef.current?.subTopic === `room:${room}`) return;
+
+    // Tear down any existing subscription for a different room
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
 
     setCurrentRoom(room);
     fetchMessages(room);
@@ -140,8 +143,9 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
         const record = payload.payload?.record || payload.payload;
         
         if (record && 'room' in record) {
-          // This is a message
+          // This is a message — guard against cross-room broadcast leakage
           const newMsg = record as Message;
+          if (newMsg.room !== room) return;
           const pseudonym = await resolvePseudonym(newMsg.profile_id);
           const enriched: Message = {
             ...newMsg,
@@ -178,8 +182,9 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
         const record = payload.payload?.record || payload.payload;
         
         if (record && 'room' in record) {
-          // Update message
+          // Update message — guard against cross-room broadcast leakage
           const updatedMsg = record as Message;
+          if (updatedMsg.room !== room) return;
           const pseudonym = await resolvePseudonym(updatedMsg.profile_id);
           const enriched: Message = {
             ...updatedMsg,
@@ -196,7 +201,7 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
       });
 
     channelRef.current = channel;
-  }, [fetchMessages, resolvePseudonym, leaveRoom]);
+  }, [fetchMessages, resolvePseudonym]);
 
   // Fetch reactions when messages change
   useEffect(() => {

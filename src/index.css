@@ -1178,3 +1178,114 @@ strong {
     font-size: 0.65rem;
   }
 }
+
+/* ---- Giphy Picker ---- */
+.giphy-picker {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 0.4rem;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.giphy-picker-header {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.giphy-search-input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-emphasis);
+  font-family: inherit;
+  font-size: 0.8rem;
+  outline: none;
+  padding: 0.25rem 0.5rem;
+}
+
+.giphy-search-input:focus {
+  border-color: var(--accent);
+}
+
+.giphy-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.giphy-close-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.2rem 0.45rem;
+}
+
+.giphy-close-btn:hover {
+  color: var(--text-emphasis);
+  border-color: var(--text-muted);
+}
+
+.giphy-grid-container {
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 0.4rem;
+}
+
+.giphy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 0.3rem;
+}
+
+.giphy-gif-btn {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  overflow: hidden;
+  padding: 0;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.giphy-gif-btn:hover {
+  border-color: var(--accent);
+  outline: 1px solid var(--accent);
+}
+
+.giphy-gif-btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.giphy-status {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  padding: 0.5rem 0.25rem;
+  text-align: center;
+}
+
+.giphy-attribution {
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  padding: 0.2rem 0.5rem;
+  text-align: right;
+}
+
+.giphy-attribution strong {
+  color: var(--text);
+  letter-spacing: 0.04em;
+}
