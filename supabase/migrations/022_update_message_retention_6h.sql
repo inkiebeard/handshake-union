@@ -1,10 +1,11 @@
 -- ============================================
 -- Update message retention from 1 hour to 6 hours
 -- ============================================
--- Reschedules the cleanup cron job and updates all functions
--- that reference the 1-hour message TTL window.
+-- Reschedules the cleanup cron job that enforces the message
+-- TTL/retention window, updating the threshold from 1 hour to 6 hours.
 
--- Drop the existing cleanup cron job and re-register with 6-hour interval.
+-- Drop the existing cleanup cron job and re-register it with the same
+-- 5-minute schedule, but a 6-hour deletion/retention window.
 SELECT cron.unschedule('cleanup-old-messages');
 
 SELECT cron.schedule(
