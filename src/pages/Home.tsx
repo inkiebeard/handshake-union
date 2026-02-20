@@ -22,7 +22,7 @@ export function Home() {
 
             <hr className="term-divider" />
 
-            <p className="prompt">Anonymous community for Australian developers</p>
+            <p className="prompt">Anonymous community for developers</p>
             <p className="comment">share workplace intel. build collective power.</p>
 
             <br />

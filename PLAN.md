@@ -2,12 +2,12 @@
 
 > handshakeunion.nexus
 >
-> Anonymous community platform for Australian developers to share workplace intel and build collective power.
+> Anonymous community platform for developers to share workplace intel and build collective power.
 > A refuge for devs being squeezed by AI hype and corporate individualism. Humans verifying humans.
 
 ## Project Goals
 
-**Primary Goal:** Prove there's appetite for an anonymous developer solidarity platform in Australia.
+**Primary Goal:** Prove there's appetite for an anonymous developer solidarity platform.
 
 **Success Metrics for POC:**
 - Can we get 20+ people to sign up and share basic work info?
@@ -547,7 +547,7 @@ If the POC shows demand, consider:
 - **Community funding** — donation mechanisms (GitHub Sponsors, Open Collective, direct)
 - **Funding visibility** — display donations vs costs so community sees sustainability
 
-### Features
+### Features Roadmap
 - **Retrospective report submissions** — `/report` form for reporting messages after TTL. User-provided content verified against receipt hashes. Screenshot upload (Supabase Storage). Trust levels: receipt-verified vs unverified.
 - **Moderator dashboard** — `/mod` route gated by role. View pending reports, resolve, see reported content.
 - **Admin dashboard** — `/admin` route. Receipt verification UI, role management, platform health metrics.
