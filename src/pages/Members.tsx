@@ -132,7 +132,7 @@ export function Members() {
         <div className="mt-5">
           <p className="is-size-7 has-text-grey">
             Message counts are tracked independently of message content. 
-            Messages are deleted after 1 hour, but the count persists. 
+            Messages are deleted after 6 hours, but the count persists. 
             No message content or metadata is exposed on this page.
           </p>
         </div>

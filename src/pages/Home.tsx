@@ -29,7 +29,7 @@ export function Home() {
 
             <p className="comment">how it works:</p>
             <p><span style={{ color: 'var(--accent)' }}>→</span> pseudonymous — auto-assigned identity, no names</p>
-            <p><span style={{ color: 'var(--accent)' }}>→</span> ephemeral — messages expire after 1 hour</p>
+            <p><span style={{ color: 'var(--accent)' }}>→</span> ephemeral — messages expire after 6 hours</p>
             <p><span style={{ color: 'var(--accent)' }}>→</span> transparent — real salary data, real conditions</p>
             <p><span style={{ color: 'var(--accent)' }}>→</span> open source — no tracking, no analytics, auditable</p>
 

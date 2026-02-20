@@ -14,6 +14,34 @@
 - Do conversations actually happen organically?
 - Does the salary/conditions data start to show interesting patterns?
 
+## Coverage Status
+
+> Last updated: 2026-02-20
+
+All six original MVP feature areas are built. Five of six implementation phases are complete. Phase 6 (Polish & Deploy) is in-flight — partial error handling and loading states exist, deployment config is live on Cloudflare Pages, but a formal test round and README polish remain.
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Authentication | ✅ Complete | Magic link, GitHub OAuth, GitLab OAuth |
+| Live Chat Rooms | ✅ Complete | All 3 rooms, realtime, reactions, custom emotes, image attachments |
+| Onboarding Form | ✅ Complete | All fields, skip option, reusable in profile mode |
+| Stats Dashboard | ✅ Complete | SVG chart, distribution bars, sample size guards, baselines |
+| Chat Integrity & Moderation | ✅ Complete | Receipts, reports, RBAC, rate limiting |
+| Role-Based Access Control | ✅ Complete | member/moderator/admin via JWT claims |
+| Polish & Deploy | 🔲 In Progress | Error handling partial, Cloudflare deployed, test round pending |
+
+**Post-plan additions (scope expansions):**
+- Profile page + pseudonym rename (Phase 3.5)
+- PixelAvatar component (deterministic 5×5 pixel art)
+- Profile history snapshots (trend data source)
+- Privacy lockdown + aggregate-only stats access (Phase 3.5)
+- Chat integrity, receipts, moderation infrastructure (Phase 3.75)
+- Image URL attachments with blur/reveal mode (Feb 2026)
+- Members directory page with public stats
+- Cloudflare Pages deployment config
+
+---
+
 ## Core Features (MVP)
 
 ### 1. Authentication
@@ -31,7 +59,7 @@ Three rooms to start:
 - **#whinge** — venting about work (cathartic, validates experience)
 
 **Chat Features:**
-- 1 hour message history max (ephemeral by design, cleanup via pg_cron)
+- 6 hour message history max (ephemeral by design, cleanup via pg_cron)
 - Basic threading/replies (reply_to_id with visual indicator)
 - Emoji reactions (toggle on/off, picker UI)
 - Custom emotes via `:shortcode:` syntax (admin-managed)
@@ -366,7 +394,7 @@ Enabled for:
 ### Cleanup Jobs
 
 Two scheduled crons (requires pg_cron extension — commented in migration, run via SQL editor):
-- **Messages**: Delete older than 1 hour, every 5 minutes
+- **Messages**: Delete older than 6 hours, every 5 minutes
 - **Moderation reports**: Delete expired (30-day TTL), daily at 3am UTC
 - **Receipts**: No cleanup — ~80 bytes each, ~29 MB/year at 1000 msgs/day. Keep indefinitely.
 
@@ -398,7 +426,7 @@ Two scheduled crons (requires pg_cron extension — commented in migration, run 
 ### Flow 3: Chat Participation
 ```
 1. Select room tab (general/memes/whinge)
-2. See last 1 hour of messages
+2. See last 6 hours of messages
 3. Real-time updates as new messages arrive
 4. Type message → send
 5. Click reactions on others' messages
@@ -525,11 +553,11 @@ npm run bui- [x] Message cleanup job (migration 015) — pg_cron schedules for 1
 - **Row Level Security** — database-level access control
 - **Privacy lockdown** — profiles restricted to own-row reads; stats exposed only via aggregate functions (no individual data enumeration)
 - **Search path security** — all DB functions use `SET search_path = ''` to prevent injection
-- **Ephemeral messages** — 1 hour TTL reduces long-term risk
+- **Ephemeral messages** — 6 hour TTL reduces long-term risk
 - **Cryptographic receipts** — SHA-256 hashes prove message existence without retaining readable content. Invisible to all user-facing roles (RLS deny-all). Enables screenshot verification.
 - **Moderation integrity** — reports machine-copy content from DB (never user-provided) and link to receipts for tamper-evident verification
 - **Role-based access** — three-tier system (member/moderator/admin) via JWT claims. Receipts admin-only. Moderation moderator+. Clean separation of concerns.
-- **Minimal data posture** — messages deleted after 1hr, reports after 30 days, only receipt hashes persist (no readable content)
+- **Minimal data posture** — messages deleted after 6 hours, reports after 30 days, only receipt hashes persist (no readable content)
 - **Profile history** — snapshots track changes for trend analysis without exposing individual records
 - **Open source** — code is auditable
 - **No analytics/tracking** — no third-party scripts
@@ -537,29 +565,41 @@ npm run bui- [x] Message cleanup job (migration 015) — pg_cron schedules for 1
 
 ---
 
-## Future Considerations (Post-POC)
+## Roadmap
 
-If the POC shows demand, consider:
+> Short-term items are things that could land before or shortly after the first public push.
+> Long-term items are post-POC, contingent on demand.
 
-### Hosting & Sustainability
+### Short-term (pre/peri launch)
+- [ ] **Phase 6 completion** — error boundaries, loading states, mobile responsiveness pass
+- [ ] **Seed custom emotes** — upload actual hosted images for the custom emote set
+- [ ] **Moderator dashboard** — `/mod` route gated by role. View pending reports, resolve, see reported content.
+- [ ] **Admin dashboard** — `/admin` route. Receipt verification UI, role management, platform health.
+- [ ] **Retrospective report form** — `/report` for post-TTL reports. User-provided content verified against receipt hashes. Trust levels: receipt-verified vs unverified.
+- [ ] **README polish** — full setup guide, contributing instructions, self-hosting notes
+- [ ] **Test round** — closed group test, gather feedback on UX and data collection
+
+### Long-term (post-POC, if demand warrants)
+
+#### Moderation & Trust
+- **Ban/warn system** — timeouts, pseudonym bans, escalation tiers
+- **Notification system** — alert moderators of new reports in real time
+- **Invite-only growth** — web-of-trust referral model to slow bad actors
+- **LLM-assisted moderation** — flag problematic content for review queue
+
+#### Features
+- **GIF search** — client-side GIF picker alongside image URL input (Tenor/Giphy, privacy trade-off to note in UI)
+- **More rooms** — user-created or admin-curated topic rooms
+- **DMs** — direct messages with E2E encryption
+- **More granular stats** — filter by company size, industry vertical, location
+- **Resource library** — know-your-rights templates, IR contacts, union links
+- **Mobile app** — React Native or PWA
+
+#### Infrastructure & Sustainability
 - **Self-hosted Supabase** — migrate off free tier to own infrastructure
-- **Cost transparency dashboard** — show real hosting costs publicly
-- **Community funding** — donation mechanisms (GitHub Sponsors, Open Collective, direct)
-- **Funding visibility** — display donations vs costs so community sees sustainability
-
-### Features Roadmap
-- **Retrospective report submissions** — `/report` form for reporting messages after TTL. User-provided content verified against receipt hashes. Screenshot upload (Supabase Storage). Trust levels: receipt-verified vs unverified.
-- **Moderator dashboard** — `/mod` route gated by role. View pending reports, resolve, see reported content.
-- **Admin dashboard** — `/admin` route. Receipt verification UI, role management, platform health metrics.
-- **Ban/warn system** — moderation actions beyond resolving reports (timeouts, pseudonym bans)
-- **Notification system** — alert moderators of new reports
-- **E2E encryption for DMs** (if we add DMs)
-- **Invite-only growth** (web of trust)
-- **More granular stats** (by company size, industry, location)
-- **Resource library** (templates, know-your-rights info)
-- **Integration with Professionals Australia** or similar
-- **Mobile app** (React Native or PWA)
-- **LLM-assisted moderation** (flag problematic content)
+- **Cost transparency dashboard** — public display of hosting costs vs donations
+- **Community funding** — GitHub Sponsors, Open Collective, or direct
+- **Integration with Professionals Australia** or similar bodies
 
 ---
 
@@ -576,3 +616,66 @@ If the POC shows demand, consider:
 ## License
 
 AGPL-3.0 — Ensures the code remains open even if someone forks and runs their own instance.
+
+---
+
+## Changelog
+
+> Tracks scope changes, feature additions, and meaningful deviations from the original plan over the life of the project. Migrations and bug fixes are listed separately in `supabase/migrations/`.
+
+### 2026-02-20 — Message retention extended: 1 hour → 6 hours
+- **Changed:** `cleanup-old-messages` cron interval updated from `1 hour` to `6 hours` (migration 022).
+- **Rationale:** 1-hour window felt too short for async participation across timezones; 6 hours preserves ephemerality while making conversations more useful.
+- **Affected:** `PLAN.md`, `README.md`, `Chat.tsx`, `Home.tsx`, `Members.tsx`, security considerations copy.
+- **Branch:** `feat/6h-message-retention`
+
+### 2026-02-20 — Image URL attachments with blur/reveal mode
+- **Added:** Messages can now include an attached image via HTTPS URL. Images render inline with a blur-by-default / click-to-reveal toggle to protect users from unexpected content.
+- **Added:** Global image display mode toggle in the chat toolbar (blurred / visible for all).
+- **Added:** `image_url` column on `messages` table (migration 017). URL integrity guards added (migration 018).
+- **Added:** Receipt hash integrity fixes for image-inclusive messages (migrations 019, 020, 021).
+- **Rationale:** User-requested UX improvement; URL-only approach avoids server-side storage and keeps the stack simple.
+- **Not in original plan.**
+
+### 2026-02-20 — Community scope broadened (non-AU)
+- **Changed:** Removed Australia-centric language from home page and descriptions. Platform is open to any developer regardless of geography.
+- **Rationale:** Unnecessary to restrict early; global scope increases data richness and network effects.
+
+### 2026-02-19 — Cloudflare Pages deployment config
+- **Added:** `wrangler.toml` for Cloudflare Workers/Pages static SPA deployment to `handshakeunion.nexus`.
+- **Added:** README with project ethos, feature overview, and industry data sources.
+- **Not in original plan** (original plan listed Vercel or Cloudflare Pages as options; Cloudflare chosen).
+
+### 2026-02-18 — Phase 5: Stats dashboard
+- **Completed:** Full aggregate stats dashboard with SVG salary progression chart, distribution bar charts, sample size guards, and seeded 2025 Australian developer baseline data.
+- **In original plan.**
+
+### 2026-02-18 — Phase 4: Chat
+- **Completed:** Realtime chat with three rooms, reply threading, emoji reactions, custom emotes, report button, delete own messages, PixelAvatar display.
+- **In original plan.**
+
+### 2026-02-18 — Phase 3.75: Chat integrity and roles (scope addition)
+- **Added:** Cryptographic receipt system — SHA-256 hash of every message, stored automatically, admin-only access.
+- **Added:** Moderation reports — machine-copy content snapshot linked to receipt for tamper-evident verification.
+- **Added:** Three-tier RBAC (member / moderator / admin) via JWT `app_metadata` claims.
+- **Added:** `report_message()`, `resolve_report()`, `assign_role()`, `verify_message_receipt()` DB functions.
+- **Rationale:** Moderation integrity was identified as a core trust requirement before launch; doing it right meant a full phase.
+- **Not in original plan as a separate phase** (moderation noted briefly in MVP but not scoped).
+
+### 2026-02-18 — Phase 3.5: Profile and privacy (scope addition)
+- **Added:** Profile page (`/profile`) — view and edit work details post-onboarding.
+- **Added:** PixelAvatar — deterministic 5×5 pixel art avatars from pseudonym hash (pure SVG, no external service).
+- **Added:** Pseudonym rename with two-step privacy warning.
+- **Added:** Profile history snapshots (`profile_snapshots` table) — auto-captured via trigger for trend data.
+- **Added:** Privacy lockdown — profiles restricted to own-row-only reads; stats via aggregate functions only.
+- **Added:** Search path security on all DB functions (`SET search_path = ''`).
+- **Rationale:** Privacy posture and user identity controls were too important to defer; built before chat to get the data model right.
+- **Not in original plan as a separate phase.**
+
+### 2026-02-18 — Phases 1–3: Foundation, auth, onboarding
+- **Completed:** Project setup, Supabase schema (migrations 001–005), React routing, terminal aesthetic theme, magic link + OAuth auth, onboarding form with all fields.
+- **In original plan.**
+
+### 2026-02-14 — Project initialised
+- **Created:** Initial project scaffold — Vite + React + TypeScript + Bulma, initial DB schema migration, basic routing.
+- **In original plan.**

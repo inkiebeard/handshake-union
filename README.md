@@ -134,7 +134,7 @@ npm run dev
 - **Pseudonymous by default** — real identity is never stored or exposed
 - **Row Level Security** — all data access enforced at the database level
 - **Profiles are private** — users can only read their own profile row; stats are exposed via aggregate functions only
-- **Ephemeral messages** — deleted after 1 hour
+- **Ephemeral messages** — deleted after 6 hours
 - **Cryptographic receipts** — SHA-256 hash of every message stored automatically. No readable content, invisible to all user-facing roles. Enables tamper-evident screenshot verification without retaining message content.
 - **Moderation reports** — machine-copy content from the database (never user-provided), linked to receipts for tamper-evident verification, hard-deleted after 30 days
 - **Search path hardened** — all DB functions use `SET search_path = ''`
