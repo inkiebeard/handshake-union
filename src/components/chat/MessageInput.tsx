@@ -147,7 +147,10 @@ export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: Messa
   };
 
   const handleToggleGiphyPicker = () => {
+    // Clear any stale image attachment when hiding the image bar via the GIF toggle
     setShowImageInput(false);
+    setImageUrl('');
+    setGifOnsentUrl('');
     setShowGiphyPicker((prev) => !prev);
   };
 
@@ -201,14 +204,33 @@ export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: Messa
       {/* Image URL input */}
       {showImageInput && (
         <div className="chat-image-url-bar">
-          <input
-            type="url"
-            className={`chat-image-url-input${imageUrlInvalid ? ' is-invalid' : ''}`}
-            placeholder="image url (https://...)"
-            value={imageUrl}
-            onChange={(e) => setImageUrl(e.target.value)}
-            disabled={disabled || sending}
-          />
+          <div className="chat-image-url-row">
+            <input
+              type="url"
+              className={`chat-image-url-input${imageUrlInvalid ? ' is-invalid' : ''}`}
+              placeholder="image url (https://...)"
+              value={imageUrl}
+              onChange={(e) => {
+                setImageUrl(e.target.value);
+                // User edited the URL manually — the original GIF onsent is no longer valid
+                setGifOnsentUrl('');
+              }}
+              disabled={disabled || sending}
+            />
+            <button
+              type="button"
+              className="chat-image-url-clear"
+              onClick={() => {
+                setImageUrl('');
+                setGifOnsentUrl('');
+                setShowImageInput(false);
+              }}
+              disabled={disabled || sending}
+              title="Remove image"
+            >
+              &times;
+            </button>
+          </div>
           {imageUrlInvalid && (
             <span className="chat-image-url-error">must be a valid https:// url</span>
           )}

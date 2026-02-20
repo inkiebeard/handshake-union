@@ -52,21 +52,28 @@ interface GiphyPickerProps {
   onClose: () => void;
 }
 
+const LIMIT = 18;
+
 type RawImages = Record<string, { url?: string; webp?: string; width?: string; height?: string; mp4?: string }>;
 type RawAnalytics = { onload?: { url?: string }; onclick?: { url?: string }; onsent?: { url?: string } };
 
-async function fetchGifs(searchQuery: string, signal?: AbortSignal): Promise<GiphyGif[]> {
+interface FetchResult {
+  gifs: GiphyGif[];
+  totalCount: number;
+}
+
+async function fetchGifs(searchQuery: string, offset: number, signal?: AbortSignal): Promise<FetchResult> {
   const randomId = await ensureRandomId();
   const base = searchQuery.trim()
-    ? `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(searchQuery)}&limit=18&rating=pg-13&lang=en`
-    : `https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_API_KEY}&limit=18&rating=pg-13`;
+    ? `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(searchQuery)}&limit=${LIMIT}&offset=${offset}&rating=pg-13&lang=en`
+    : `https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_API_KEY}&limit=${LIMIT}&offset=${offset}&rating=pg-13`;
 
   const endpoint = randomId ? `${base}&random_id=${randomId}` : base;
   const res = await fetch(endpoint, { signal });
   if (!res.ok) throw new Error('giphy request failed');
   const data = await res.json();
 
-  return (data.data as Record<string, unknown>[]).map((g) => {
+  const gifs = (data.data as Record<string, unknown>[]).map((g) => {
     const images = g.images as RawImages;
     const analytics = (g.analytics ?? {}) as RawAnalytics;
 
@@ -88,26 +95,42 @@ async function fetchGifs(searchQuery: string, signal?: AbortSignal): Promise<Gip
       },
     };
   });
+
+  return {
+    gifs,
+    totalCount: (data.pagination?.total_count as number) ?? 0,
+  };
 }
 
 export function GiphyPicker({ onSelect, onClose }: GiphyPickerProps) {
   const [query, setQuery] = useState('');
   const [gifs, setGifs] = useState<GiphyGif[]>([]);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  const load = useCallback(async (q: string) => {
+  const load = useCallback(async (q: string, nextOffset: number, append: boolean) => {
     abortControllerRef.current?.abort();
     abortControllerRef.current = new AbortController();
     const { signal } = abortControllerRef.current;
-    setLoading(true);
-    setError(null);
+
+    if (append) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+      setError(null);
+    }
+
     try {
-      const results = await fetchGifs(q, signal);
-      setGifs(results);
+      const { gifs: results, totalCount } = await fetchGifs(q, nextOffset, signal);
+      setGifs((prev) => append ? [...prev, ...results] : results);
+      setOffset(nextOffset);
+      setHasMore(nextOffset + LIMIT < totalCount);
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         setError('failed to load GIFs');
@@ -115,13 +138,14 @@ export function GiphyPicker({ onSelect, onClose }: GiphyPickerProps) {
     } finally {
       if (!signal.aborted) {
         setLoading(false);
+        setLoadingMore(false);
       }
     }
   }, []);
 
   useEffect(() => {
     searchRef.current?.focus();
-    load('');
+    load('', 0, false);
   }, [load]);
 
   useEffect(() => {
@@ -142,7 +166,7 @@ export function GiphyPicker({ onSelect, onClose }: GiphyPickerProps) {
   const handleQueryChange = (value: string) => {
     setQuery(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => load(value), 400);
+    debounceRef.current = setTimeout(() => load(value, 0, false), 400);
   };
 
   return (
@@ -169,27 +193,39 @@ export function GiphyPicker({ onSelect, onClose }: GiphyPickerProps) {
           <div className="giphy-status">no results for "{query}"</div>
         )}
         {!loading && !error && (
-          <div className="giphy-grid">
-            {gifs.map((gif) => (
+          <>
+            <div className="giphy-grid">
+              {gifs.map((gif) => (
+                <button
+                  key={gif.id}
+                  type="button"
+                  className="giphy-gif-btn"
+                  onClick={() => {
+                    fireGiphyAnalytics(gif.analytics.onclickUrl);
+                    onSelect(gif.url, gif.analytics.onsentUrl);
+                    onClose();
+                  }}
+                >
+                  <img
+                    src={gif.previewUrl}
+                    alt={gif.alt}
+                    loading="lazy"
+                    onLoad={() => fireGiphyAnalytics(gif.analytics.onloadUrl)}
+                  />
+                </button>
+              ))}
+            </div>
+            {hasMore && (
               <button
-                key={gif.id}
                 type="button"
-                className="giphy-gif-btn"
-                onClick={() => {
-                  fireGiphyAnalytics(gif.analytics.onclickUrl);
-                  onSelect(gif.url, gif.analytics.onsentUrl);
-                  onClose();
-                }}
+                className="giphy-more-btn"
+                onClick={() => load(query, offset + LIMIT, true)}
+                disabled={loadingMore}
               >
-                <img
-                  src={gif.previewUrl}
-                  alt={gif.alt}
-                  loading="lazy"
-                  onLoad={() => fireGiphyAnalytics(gif.analytics.onloadUrl)}
-                />
+                {loadingMore ? 'loading...' : 'more'}
               </button>
-            ))}
-          </div>
+            )}
+          </>
         )}
       </div>
 
