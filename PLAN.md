@@ -93,7 +93,7 @@ Collect structured data (all optional, but encouraged):
 
 ### 5. Chat Integrity & Moderation
 - **Cryptographic receipts** — SHA-256 hash of every message stored automatically via trigger. No readable content, no author identity. System-level only (admin access).
-- **Live moderation reports** — users can report messages while they still exist (< 1hr). Content is machine-copied from DB (never user-provided). Linked to receipt for tamper-evident verification.
+- **Live moderation reports** — users can report messages while they still exist (within the 6-hour retention window). Content is machine-copied from DB (never user-provided). Linked to receipt for tamper-evident verification.
 - **30-day report TTL** — moderation reports hard-deleted after 30 days. Receipts persist indefinitely (~80 bytes each).
 - **Retrospective submissions** (future) — separate form for reporting after message TTL. User-provided content verified against receipt hashes. Lower trust level.
 
@@ -120,7 +120,7 @@ Three-tier system via JWT `app_metadata` claims:
 | Styling | Bulma CSS | Clean, simple, no build step |
 | Routing | React Router | Standard, simple |
 | Backend/DB | Supabase | Auth, Postgres, Realtime, Row Level Security |
-| Hosting (Frontend) | Vercel or Cloudflare Pages | Free tier, easy deploys |
+| Hosting (Frontend) | Cloudflare Pages | Free tier, easy deploys, deployed to handshakeunion.nexus |
 | Hosting (Backend) | Supabase Free Tier → Self-hosted | Start free, migrate when needed |
 | Auth | Supabase Auth | Magic links, OAuth, MFA built-in |
 
@@ -200,13 +200,20 @@ handshake-union/
 │       ├── 013_custom_emotes.sql
 │       ├── 014_seed_baseline_stats.sql
 │       ├── 015_enable_cron_cleanup.sql
-│       └── 016_public_member_stats.sql
+│       ├── 016_public_member_stats.sql
+│       ├── 017_messages_image_url.sql
+│       ├── 018_image_url_integrity.sql
+│       ├── 019_fix_digest_search_path.sql
+│       ├── 020_fix_receipt_hash_separator.sql
+│       ├── 021_fix_verify_functions_hash.sql
+│       └── 022_update_message_retention_6h.sql
 ├── index.html
 ├── package.json
 ├── tsconfig.json
 ├── tsconfig.app.json
 ├── tsconfig.node.json
 ├── vite.config.ts
+├── wrangler.toml
 ├── .env.example
 ├── .gitignore
 ├── LICENSE (AGPL-3.0)
@@ -223,7 +230,10 @@ handshake-union/
 001_initial_schema → 002_varied_pseudonyms → 003_fix_search_path → 004_profile_history →
 005_privacy_lockdown → 006_chat_integrity → 007_roles → 008_fix_snapshot_triggers →
 009_fix_digest_search_path → 010_fix_digest_extensions_schema → 011_broadcast_triggers →
-012_fix_reactions_broadcast → 013_custom_emotes → 014_seed_baseline_stats → 015_enable_cron_cleanup → 016_public_member_stats
+012_fix_reactions_broadcast → 013_custom_emotes → 014_seed_baseline_stats →
+015_enable_cron_cleanup → 016_public_member_stats → 017_messages_image_url →
+018_image_url_integrity → 019_fix_digest_search_path → 020_fix_receipt_hash_separator →
+021_fix_verify_functions_hash → 022_update_message_retention_6h
 ```
 
 ### Tables
@@ -251,6 +261,7 @@ handshake-union/
 - room: enum ('general', 'memes', 'whinge')
 - profile_id: uuid (FK to profiles)
 - content: text (max 2000 chars)
+- image_url: text (nullable, https:// only, max 2048 chars — added migration 017)
 - created_at: timestamp
 - reply_to_id: uuid (nullable, FK to messages)
 ```
@@ -512,7 +523,7 @@ Two scheduled crons (requires pg_cron extension — commented in migration, run 
 - [x] Report button on messages (calls `report_message()`)
 - [x] Message deletion (own messages only)
 - [x] PixelAvatar display per message author
-npm run bui- [x] Message cleanup job (migration 015) — pg_cron schedules for 1hr message TTL + 30-day report TTL
+- [x] Message cleanup job (migration 015) — pg_cron schedules for message TTL + 30-day report TTL (TTL initially 1hr; updated to 6h via migration 022)
 
 ### Phase 5: Stats ✅ COMPLETE
 - [x] Stats page shell with placeholder layout
@@ -534,13 +545,13 @@ npm run bui- [x] Message cleanup job (migration 015) — pg_cron schedules for 1
 - [x] Low sample size warnings and empty state handling
 - [x] Methodology notes explaining data sources and confidence thresholds
 
-### Phase 6: Polish & Deploy 🔲 NOT STARTED
+### Phase 6: Polish & Deploy 🔲 IN PROGRESS
 - [ ] Error handling (partial — some exists in hooks)
 - [ ] Loading states (partial — exists in auth/profile/chat/stats)
 - [ ] Mobile responsiveness (partial — basic Bulma responsive)
 - [x] Activate pg_cron for message cleanup (migration 015)
-- [ ] Deploy to Vercel/Cloudflare
-- [ ] README documentation
+- [x] Deploy to Cloudflare Pages (handshakeunion.nexus — wrangler.toml added Feb 2026)
+- [x] README documentation (initial version live)
 - [ ] Test with small group
 - [ ] Seed custom emotes with actual hosted images
 
@@ -626,7 +637,7 @@ AGPL-3.0 — Ensures the code remains open even if someone forks and runs their 
 ### 2026-02-20 — Message retention extended: 1 hour → 6 hours
 - **Changed:** `cleanup-old-messages` cron interval updated from `1 hour` to `6 hours` (migration 022).
 - **Rationale:** 1-hour window felt too short for async participation across timezones; 6 hours preserves ephemerality while making conversations more useful.
-- **Affected:** `PLAN.md`, `README.md`, `Chat.tsx`, `Home.tsx`, `Members.tsx`, security considerations copy.
+- **Affected:** `PLAN.md`, `README.md`, `ChatContext.tsx` (fetch window + client-side prune interval), `Chat.tsx`, `Home.tsx`, `Members.tsx`, security considerations copy.
 - **Branch:** `feat/6h-message-retention`
 
 ### 2026-02-20 — Image URL attachments with blur/reveal mode
