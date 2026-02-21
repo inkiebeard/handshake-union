@@ -76,31 +76,3 @@ export const CHAT_ROOMS: { id: ChatRoom; label: string; description: string }[] 
   { id: 'whinge', label: '#whinge', description: 'Venting about work' },
 ];
 
-// ============================================
-// Approved reactions
-// ============================================
-// Curated set of reactions allowed in chat.
-// Extend this list to add new approved reactions.
-// Custom text shortcodes map to display values.
-
-export const APPROVED_REACTIONS: { code: string; display: string; label: string }[] = [
-  // Standard
-  { code: '👍', display: '👍', label: 'Thumbs up' },
-  { code: '👎', display: '👎', label: 'Thumbs down' },
-  { code: '😂', display: '😂', label: 'Laughing' },
-  { code: '🔥', display: '🔥', label: 'Fire' },
-  { code: '👀', display: '👀', label: 'Eyes' },
-  { code: '💯', display: '💯', label: 'Hundred' },
-  { code: '🤝', display: '🤝', label: 'Handshake' },
-  { code: '😤', display: '😤', label: 'Frustrated' },
-  // Dev culture
-  { code: '🐛', display: '🐛', label: 'Bug' },
-  { code: '🚀', display: '🚀', label: 'Ship it' },
-  { code: '💀', display: '💀', label: 'Dead' },
-  { code: '🫡', display: '🫡', label: 'Salute' },
-  { code: '☕', display: '☕', label: 'Coffee' },
-  // Solidarity
-  { code: ':solidarity:', display: '✊', label: 'Solidarity' },
-  { code: ':union:', display: '🤝', label: 'Union strong' },
-  { code: ':fair-go:', display: '⚖️', label: 'Fair go' },
-];
