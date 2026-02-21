@@ -23,9 +23,9 @@ interface EmojiCategory {
 
 // Quick reactions shown at the top of the picker (most commonly used)
 const QUICK_REACTION_CODES = [
-  'thumbsup', '+1', 'thumbsdown', 'joy', 'fire', 'eyes', '100',
+  'thumbsup', 'thumbsdown', 'joy', 'fire', 'eyes', '100',
   'handshake', 'bug', 'rocket', 'skull', 'salute', 'coffee',
-  'solidarity', 'union', 'fair-go',
+  'solidarity', 'union', 'fair-go', 'facepalm', 'panik', 'chefkiss'
 ];
 
 // Base categories for organizing standard emojis
@@ -61,6 +61,10 @@ export function ReactionPicker({ onSelect }: ReactionPickerProps) {
   // any spurious scroll events on underlying containers are ignored.
   const touchedInsideRef = useRef(false);
   const touchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Set true briefly after the picker opens to suppress scroll events triggered
+  // by the tap itself (mobile overscroll bounce) or keyboard appearance.
+  const justOpenedRef = useRef(false);
+  const justOpenedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Get all emojis
   const allEmojis = useMemo(() => getAllEmojis(), []);
@@ -76,8 +80,8 @@ export function ReactionPicker({ onSelect }: ReactionPickerProps) {
       emojis,
     }));
     
-    // Combine base categories with custom ones
-    return [...BASE_EMOJI_CATEGORIES, ...customCats];
+    // Custom categories first, then base categories
+    return [...customCats, ...BASE_EMOJI_CATEGORIES];
   }, []);
   
   // Filter emojis based on search or category
@@ -144,6 +148,14 @@ export function ReactionPicker({ onSelect }: ReactionPickerProps) {
   useEffect(() => {
     if (!open) return;
 
+    // Suppress scroll-close briefly after opening to absorb any bounce/overscroll
+    // events that mobile browsers fire as a side-effect of the tap that opened the picker.
+    justOpenedRef.current = true;
+    if (justOpenedTimerRef.current) clearTimeout(justOpenedTimerRef.current);
+    justOpenedTimerRef.current = setTimeout(() => {
+      justOpenedRef.current = false;
+    }, 400);
+
     // Desktop: mousedown outside closes picker
     const handleClickOutside = (e: MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
@@ -151,7 +163,7 @@ export function ReactionPicker({ onSelect }: ReactionPickerProps) {
       }
     };
 
-    // Mobile: touchstart outside closes picker (mousedown synthesis is unreliable on iOS)
+    // Mobile: touchstart outside closes picker (mousedown synthesis is unreliable on mobile)
     const handleTouchOutside = (e: TouchEvent) => {
       const target = e.target as Node;
       if (
@@ -163,7 +175,7 @@ export function ReactionPicker({ onSelect }: ReactionPickerProps) {
     };
 
     // Track when user touches inside the picker so the scroll handler can
-    // ignore spurious scroll events that iOS fires on underlying containers.
+    // ignore spurious scroll events that mobile browsers fire on underlying containers.
     const handleTouchInsidePicker = (e: TouchEvent) => {
       if (pickerRef.current && pickerRef.current.contains(e.target as Node)) {
         touchedInsideRef.current = true;
@@ -180,8 +192,13 @@ export function ReactionPicker({ onSelect }: ReactionPickerProps) {
         return;
       }
       // Don't close if this scroll was triggered by touching inside the picker
-      // (iOS fires scroll events on underlying containers when tapping fixed overlays)
+      // (mobile browsers fire scroll events on underlying containers when tapping fixed overlays)
       if (touchedInsideRef.current) {
+        return;
+      }
+      // Don't close during the brief cooldown after opening (absorbs mobile bounce
+      // scroll from the tap that opened the picker, or keyboard-show scroll)
+      if (justOpenedRef.current) {
         return;
       }
       setOpen(false);
@@ -197,13 +214,18 @@ export function ReactionPicker({ onSelect }: ReactionPickerProps) {
       document.removeEventListener('touchstart', handleTouchInsidePicker, { capture: true });
       document.removeEventListener('scroll', handleScroll, true);
       if (touchTimerRef.current) clearTimeout(touchTimerRef.current);
+      if (justOpenedTimerRef.current) clearTimeout(justOpenedTimerRef.current);
     };
   }, [open]);
 
-  // Focus search when opened
+  // Focus search when opened — skip on touch devices to avoid popping the
+  // keyboard, which causes a scroll event that would immediately close the picker.
   useEffect(() => {
     if (open && searchRef.current) {
-      setTimeout(() => searchRef.current?.focus(), 50);
+      const isTouchDevice = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+      if (!isTouchDevice) {
+        setTimeout(() => searchRef.current?.focus(), 50);
+      }
     }
   }, [open]);
 
