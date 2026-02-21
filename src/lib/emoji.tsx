@@ -258,7 +258,7 @@ export function getEmoji(code: string): Emoji | undefined {
  */
 export function getAllEmojis(): Emoji[] {
   const customEmotes = getCachedEmotes().map(customEmoteToEmoji);
-  return [...customEmotes, ...STANDARD_EMOJIS].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+  return [...customEmotes, ...STANDARD_EMOJIS];
 }
 
 /**
