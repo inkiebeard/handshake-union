@@ -28,6 +28,20 @@ const QUICK_REACTION_CODES = [
   'solidarity', 'union', 'fair-go', 'facepalm', 'panik', 'chefkiss'
 ];
 
+function renderPickerEmoji(emoji: Emoji) {
+  if (emoji.isCustom) {
+    return (
+      <img
+        src={emoji.display}
+        alt={emoji.alt}
+        className="reaction-emoji-img"
+        loading="lazy"
+      />
+    );
+  }
+  return <span>{emoji.display}</span>;
+}
+
 // Base categories for organizing standard emojis
 const BASE_EMOJI_CATEGORIES: EmojiCategory[] = [
   { id: 'quick', label: 'Quick', codes: QUICK_REACTION_CODES },
@@ -234,7 +248,7 @@ export function ReactionPicker({ onSelect }: ReactionPickerProps) {
     if (!open) {
       setStyle(calculateStyle());
       setSearchQuery('');
-      setActiveCategory('quick');
+      setActiveCategory(categories[0]?.id ?? 'quick');
     }
     setOpen(!open);
   };
@@ -243,20 +257,6 @@ export function ReactionPicker({ onSelect }: ReactionPickerProps) {
     // Use the shortcode format for reactions
     onSelect(`:${emoji.code}:`);
     setOpen(false);
-  };
-
-  const renderEmoji = (emoji: Emoji) => {
-    if (emoji.isCustom) {
-      return (
-        <img
-          src={emoji.display}
-          alt={emoji.alt}
-          className="reaction-emoji-img"
-          loading="lazy"
-        />
-      );
-    }
-    return <span>{emoji.display}</span>;
   };
 
   return (
@@ -318,7 +318,7 @@ export function ReactionPicker({ onSelect }: ReactionPickerProps) {
                   onClick={() => handleSelect(emoji)}
                   title={`:${emoji.code}: - ${emoji.alt}`}
                 >
-                  {renderEmoji(emoji)}
+                  {renderPickerEmoji(emoji)}
                 </button>
               ))
             )}

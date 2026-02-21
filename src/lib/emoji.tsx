@@ -265,7 +265,7 @@ export function getAllEmojis(): Emoji[] {
  * Get only standard emojis (no custom)
  */
 export function getStandardEmojis(): Emoji[] {
-  return [...STANDARD_EMOJIS].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+  return [...STANDARD_EMOJIS];
 }
 
 /**
@@ -314,7 +314,6 @@ function renderEmoji(emoji: Emoji, key: string | number): ReactNode {
         src={emoji.display}
         alt={emoji.alt}
         title={`:${emoji.code}:`}
-        data-score={emoji.score}
         className="chat-emoji chat-emoji-custom"
         loading="lazy"
       />
