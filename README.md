@@ -5,7 +5,7 @@
 > Anonymous community platform for developers to share workplace intel and build collective power.
 
 > [!IMPORTANT]  
-> No fiefs. Not Algorithm. The guild is us.
+> No fiefs. Nor Algorithm. The guild is us.
 
 ---
 
