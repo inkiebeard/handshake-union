@@ -59,7 +59,7 @@ Three rooms to start:
 - **#whinge** — venting about work (cathartic, validates experience)
 
 **Chat Features:**
-- 6 hour message history max (ephemeral by design, cleanup via pg_cron)
+- 72 hour message history max (ephemeral by design, cleanup via pg_cron)
 - Basic threading/replies (reply_to_id with visual indicator)
 - Emoji reactions (toggle on/off, picker UI)
 - Custom emotes via `:shortcode:` syntax (admin-managed)
@@ -93,7 +93,7 @@ Collect structured data (all optional, but encouraged):
 
 ### 5. Chat Integrity & Moderation
 - **Cryptographic receipts** — SHA-256 hash of every message stored automatically via trigger. No readable content, no author identity. System-level only (admin access).
-- **Live moderation reports** — users can report messages while they still exist (within the 6-hour retention window). Content is machine-copied from DB (never user-provided). Linked to receipt for tamper-evident verification.
+- **Live moderation reports** — users can report messages while they still exist (within the 72-hour retention window). Content is machine-copied from DB (never user-provided). Linked to receipt for tamper-evident verification.
 - **30-day report TTL** — moderation reports hard-deleted after 30 days. Receipts persist indefinitely (~80 bytes each).
 - **Retrospective submissions** (future) — separate form for reporting after message TTL. User-provided content verified against receipt hashes. Lower trust level.
 
@@ -405,7 +405,7 @@ Enabled for:
 ### Cleanup Jobs
 
 Two scheduled crons (requires pg_cron extension — commented in migration, run via SQL editor):
-- **Messages**: Delete older than 6 hours, every 5 minutes
+- **Messages**: Delete older than 72 hours, every 5 minutes
 - **Moderation reports**: Delete expired (30-day TTL), daily at 3am UTC
 - **Receipts**: No cleanup — ~80 bytes each, ~29 MB/year at 1000 msgs/day. Keep indefinitely.
 
@@ -437,7 +437,7 @@ Two scheduled crons (requires pg_cron extension — commented in migration, run 
 ### Flow 3: Chat Participation
 ```
 1. Select room tab (general/memes/whinge)
-2. See last 6 hours of messages
+2. See last 72 hours of messages
 3. Real-time updates as new messages arrive
 4. Type message → send
 5. Click reactions on others' messages
@@ -564,11 +564,11 @@ Two scheduled crons (requires pg_cron extension — commented in migration, run 
 - **Row Level Security** — database-level access control
 - **Privacy lockdown** — profiles restricted to own-row reads; stats exposed only via aggregate functions (no individual data enumeration)
 - **Search path security** — all DB functions use `SET search_path = ''` to prevent injection
-- **Ephemeral messages** — 6 hour TTL reduces long-term risk
+- **Ephemeral messages** — 72 hour TTL reduces long-term risk
 - **Cryptographic receipts** — SHA-256 hashes prove message existence without retaining readable content. Invisible to all user-facing roles (RLS deny-all). Enables screenshot verification.
 - **Moderation integrity** — reports machine-copy content from DB (never user-provided) and link to receipts for tamper-evident verification
 - **Role-based access** — three-tier system (member/moderator/admin) via JWT claims. Receipts admin-only. Moderation moderator+. Clean separation of concerns.
-- **Minimal data posture** — messages deleted after 6 hours, reports after 30 days, only receipt hashes persist (no readable content)
+- **Minimal data posture** — messages deleted after 72 hours, reports after 30 days, only receipt hashes persist (no readable content)
 - **Profile history** — snapshots track changes for trend analysis without exposing individual records
 - **Open source** — code is auditable
 - **No analytics/tracking** — no third-party scripts
@@ -633,6 +633,12 @@ AGPL-3.0 — Ensures the code remains open even if someone forks and runs their 
 ## Changelog
 
 > Tracks scope changes, feature additions, and meaningful deviations from the original plan over the life of the project. Migrations and bug fixes are listed separately in `supabase/migrations/`.
+
+### 2026-02-26 — Message retention extended: 6 hours → 72 hours
+- **Changed:** `cleanup-old-messages` cron interval updated from `6 hours` to `72 hours` (migration 023).
+- **Rationale:** 72-hour window better supports async participation and gives meaningful conversation context without abandoning ephemerality. Storage impact is negligible (~5–10 MB at thriving scale).
+- **Affected:** `PLAN.md`, `README.md`, `AGENTS.md`, `Chat.tsx`, `Home.tsx`, `Members.tsx`, `Privacy.tsx`, security considerations copy.
+- **Branch:** `feature/72h-message-retention`
 
 ### 2026-02-20 — Message retention extended: 1 hour → 6 hours
 - **Changed:** `cleanup-old-messages` cron interval updated from `1 hour` to `6 hours` (migration 022).
