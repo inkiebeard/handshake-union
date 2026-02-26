@@ -1,0 +1,83 @@
+# AGENTS.md — Handshake Union
+
+## Project Ethos
+
+This is an anonymous developer solidarity platform. Every decision should reinforce these principles:
+
+- **Privacy is non-negotiable.** Never expose individual data. Stats are aggregate-only with sample size guards. Pseudonyms cannot be correlated to real identities. Messages are ephemeral (72-hour TTL). When in doubt, collect less.
+- **Information asymmetry is the enemy.** The platform exists to give workers the information employers already have — salary bands, conditions, trends. Collective knowledge is the product.
+- **No engagement hacking.** No likes on profiles, no follower counts, no algorithmic feeds, no dark patterns. Just people talking.
+- **Open source and auditable.** The code is the trust model. If the privacy claim is wrong, anyone can see exactly where. Licensed AGPL-3.0 so forks stay open.
+- **Minimal data posture.** Messages deleted after 72 hours. Moderation reports hard-deleted after 30 days. Only ~80-byte cryptographic receipt hashes persist. Never store what you don't need.
+
+## Tech Stack
+
+| Layer | Choice |
+|-------|--------|
+| Frontend | React 18 + TypeScript + Vite |
+| Styling | Bulma CSS with custom terminal-aesthetic theme |
+| Backend / DB | Supabase (Postgres + Auth + Realtime + Row Level Security) |
+| Hosting | Cloudflare Pages (handshakeunion.nexus) |
+
+## Architecture Conventions
+
+### Frontend
+
+- **Functional components only.** No class components.
+- **Hooks for state and data.** Custom hooks live in `src/hooks/` (e.g. `useAuth`, `useProfile`, `useStats`, `useMessages`, `useMembers`, `useCustomEmotes`).
+- **Contexts for shared state.** `ChatContext` manages chat state + realtime subscriptions. `EmoteContext` provides custom emotes.
+- **Types in `src/types/database.ts`.** All DB row types, enums, and moderation types are defined here. Keep them in sync with the Supabase schema.
+- **Constants in `src/lib/constants.ts`.** Human-readable labels for all enum values. If you add an enum variant to the DB, add its label here.
+- **Pages in `src/pages/`.** One file per route. Protected routes wrap with `<ProtectedRoute>`.
+- **Components colocated by domain.** `components/chat/`, `components/auth/`, `components/layout/`, `components/onboarding/`, `components/stats/`.
+
+### Styling
+
+- **Terminal aesthetic.** Dark theme, monospace fonts, green accent (`--accent: #3fb950`). The UI deliberately looks like a terminal — `$ ` prompts, `# ` comments, ASCII art.
+- **CSS variables in `src/index.css`.** All colors use CSS custom properties (`--bg`, `--bg-surface`, `--border`, `--text`, `--accent`, etc.). Never hardcode colors.
+- **Bulma for layout, custom CSS for everything else.** Bulma provides grid/columns/responsive utilities. All component-specific styles are in `index.css` with BEM-ish class names (e.g. `chat-message-author`, `chat-reaction-badge`).
+- **No CSS modules, no CSS-in-JS.** Plain CSS only.
+
+### Database & Backend
+
+- **Supabase is the entire backend.** No custom API server. Auth, Postgres, Realtime, and RLS handle everything.
+- **Row Level Security enforces access control.** Profiles are own-row-only reads. Messages are authenticated-read, own-write. Receipts deny ALL for authenticated users. Never bypass RLS from the frontend.
+- **Aggregate functions for stats.** Individual profile data is never exposed. All stats go through `get_salary_distribution()`, `get_role_distribution()`, etc.
+- **Migrations are sequential and numbered.** `supabase/migrations/001_*.sql` through `022_*.sql`. New migrations continue the sequence.
+- **All DB functions use `SET search_path = ''`.** This is a security requirement — prevents search path injection.
+- **Three-tier RBAC.** `member` (default) / `moderator` / `admin` via JWT `app_metadata` claims. Check with `is_moderator()` / `is_admin()` in RLS policies.
+- **Cryptographic receipts are system-level only.** `message_receipts` are invisible to all user-facing roles. They exist for tamper-evident moderation, not for display.
+
+### Auth
+
+- **Magic link + OAuth (GitHub, GitLab).** No passwords. Supabase Auth handles everything.
+- **Pseudonyms auto-generated on signup** via `handle_new_user()` trigger. Format: `prefix_hexsuffix` (e.g. `worker_a7f3b2`).
+- **Roles assigned on signup.** Default role is `member`, set in `app_metadata`.
+
+## Code Style
+
+- TypeScript strict mode. No `any` unless absolutely necessary.
+- Named exports for components and hooks (e.g. `export function Home()`, `export function useAuth()`).
+- Prefer `interface` for object shapes, `type` for unions and aliases.
+- Minimal comments — code should be self-explanatory. Comments only for non-obvious intent or security constraints.
+- No third-party analytics, tracking, or telemetry. Ever.
+
+## Security Invariants
+
+These must never be violated:
+
+1. **No individual profile data in API responses.** Stats are aggregate-only via DB functions.
+2. **Receipts are never exposed to the frontend.** No types, no queries, no UI. System-level only.
+3. **Moderation reports machine-copy content from DB.** Never accept user-provided message content for reports.
+4. **Sample size guards on salary data.** n < 30 = data hidden. This protects small-group privacy.
+5. **Messages are ephemeral.** 72-hour TTL enforced by pg_cron. Don't add features that persist message content beyond this window (receipts store hashes, not content).
+6. **Search path hardened.** Every new DB function must include `SET search_path = ''`.
+7. **HTTPS-only image URLs.** The `image_url` column enforces `https://` prefix at the DB level.
+
+## Working With This Codebase
+
+- **`PLAN.md`** is the source of truth for features, schema, and implementation status. Read it before making significant changes.
+- **Migrations are append-only.** Never edit an existing migration. Create a new one.
+- **The dev server runs on Vite.** `npm run dev` after `nvm use`.
+- **Deploy via Cloudflare Pages.** `wrangler.toml` is configured. `npm run build` produces the static output.
+- **Environment variables** are in `.env.local` (not committed). See `.env.example` for the shape.

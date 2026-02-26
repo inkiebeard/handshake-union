@@ -112,7 +112,7 @@ export function Privacy() {
             <p>
               handshake union does not store which GIFs you searched for or viewed.
               only the final GIF URL included in a sent message is persisted (in Supabase,
-              see below), subject to the same 6-hour expiry as all messages.
+              see below), subject to the same 72-hour expiry as all messages.
             </p>
             <br />
             <p>
@@ -157,7 +157,7 @@ export function Privacy() {
 
             <p className="comment">message storage</p>
             <p><Arrow /> message content, room, timestamp, your profile ID, and any attached image URL are stored in Supabase's PostgreSQL database</p>
-            <p><Arrow /> all messages are automatically deleted after 6 hours via a server-side expiry job</p>
+            <p><Arrow /> all messages are automatically deleted after 72 hours via a server-side expiry job</p>
             <p><Arrow /> reply relationships and reactions are stored and expire with the associated messages</p>
             <br />
 
@@ -187,7 +187,7 @@ export function Privacy() {
             <p className="comment">your rights</p>
             <p>
               if you want your account and messages deleted, contact us via the GitHub
-              repository. messages expire automatically after 6 hours. to exercise rights
+              repository. messages expire automatically after 72 hours. to exercise rights
               over data held by Cloudflare, GIPHY, or Supabase directly, contact those
               services using the links above.
             </p>
