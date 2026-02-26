@@ -17,6 +17,7 @@ interface MessageListProps {
   loading: boolean;
   loadingOlder: boolean;
   hasMore: boolean;
+  loadOlderError?: string | null;
   imageDisplayMode: ImageDisplayMode;
   onReply: (message: MessageType) => void;
   onDelete: (id: string) => void;
@@ -35,6 +36,7 @@ export function MessageList({
   loading,
   loadingOlder,
   hasMore,
+  loadOlderError,
   imageDisplayMode,
   onReply,
   onDelete,
@@ -48,8 +50,12 @@ export function MessageList({
   const isNearBottomRef = useRef(true);
   const [showNewMessages, setShowNewMessages] = useState(false);
 
-  // Scroll anchor: saved before a load-older request so we can restore position after prepend
-  const scrollAnchorRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
+  // Scroll anchor: reference to the first message element + its content-space position at the
+  // time load-more was triggered. Using a DOM element ref rather than scrollHeight means the
+  // delta only reflects content prepended *before* the anchor — realtime-appended messages
+  // are below it and don't affect its offsetTop, so concurrent broadcasts can't corrupt the
+  // restoration. A diff of 0 (error path — nothing was prepended) is also a no-op.
+  const scrollAnchorRef = useRef<{ element: HTMLElement; prevTop: number } | null>(null);
 
   const scrollToBottom = (smooth = true) => {
     const el = containerRef.current;
@@ -75,39 +81,68 @@ export function MessageList({
     return el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_THRESHOLD;
   };
 
-  // Save scroll position, then ask the context for older messages
+  // Returns the element's position in the container's content space, independent of
+  // CSS offsetParent chains. Reliable in useLayoutEffect before the browser paints.
+  const getContentTop = (el: HTMLElement): number => {
+    const container = containerRef.current;
+    if (!container) return 0;
+    return (
+      el.getBoundingClientRect().top -
+      container.getBoundingClientRect().top +
+      container.scrollTop
+    );
+  };
+
+  // Find the first message element (skip the load-older indicator at the top if present)
+  // and save its content-space position as the scroll anchor.
   const handleLoadMore = () => {
     if (!containerRef.current || scrollAnchorRef.current) return;
+
+    const inner = innerRef.current;
+    if (!inner) return;
+
+    let firstMsgEl: HTMLElement | null = null;
+    for (const child of Array.from(inner.children)) {
+      if (!(child as HTMLElement).classList.contains('chat-load-older-indicator')) {
+        firstMsgEl = child as HTMLElement;
+        break;
+      }
+    }
+    if (!firstMsgEl) return;
+
     scrollAnchorRef.current = {
-      scrollHeight: containerRef.current.scrollHeight,
-      scrollTop: containerRef.current.scrollTop,
+      element: firstMsgEl,
+      prevTop: getContentTop(firstMsgEl),
     };
     onLoadMore();
   };
 
   const handleScroll = () => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    const near = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_THRESHOLD;
+    const near = checkNearBottom();
     isNearBottomRef.current = near;
     if (near) setShowNewMessages(false);
 
-    // Trigger pagination when the user scrolls close to the top
-    if (el.scrollTop < NEAR_TOP_THRESHOLD && hasMore && !loadingOlder) {
+    const el = containerRef.current;
+    if (el && el.scrollTop < NEAR_TOP_THRESHOLD && hasMore && !loadingOlder) {
       handleLoadMore();
     }
   };
 
-  // After older messages are prepended (loadingOlder just became false), restore scroll position
-  // so the viewport stays anchored to the same message the user was looking at.
+  // After older messages are prepended, restore the scroll position using the element anchor.
+  // diff > 0 only when content was actually prepended before the anchor element — concurrent
+  // realtime appends (below the anchor) produce no diff, and a failed fetch (no DOM change)
+  // also produces no diff, so both cases are naturally no-ops.
   useLayoutEffect(() => {
     if (!loadingOlder && scrollAnchorRef.current && containerRef.current) {
-      const { scrollHeight: prevScrollHeight, scrollTop: prevScrollTop } = scrollAnchorRef.current;
-      const diff = containerRef.current.scrollHeight - prevScrollHeight;
-      containerRef.current.scrollTop = prevScrollTop + diff;
+      const { element, prevTop } = scrollAnchorRef.current;
+      const diff = getContentTop(element) - prevTop;
+      if (diff > 0) {
+        containerRef.current.scrollTop += diff;
+      }
       scrollAnchorRef.current = null;
     }
+  // getContentTop is stable (only uses refs, not state), so it's safe to omit from deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadingOlder]);
 
   // When new messages arrive: auto-scroll if at bottom, otherwise show banner
@@ -183,7 +218,18 @@ export function MessageList({
               <span className="comment">loading older messages...</span>
             </div>
           )}
-          {!loadingOlder && hasMore && (
+          {!loadingOlder && loadOlderError && (
+            <div className="chat-load-older-indicator">
+              <button
+                type="button"
+                className="chat-load-older-btn chat-load-older-btn--error"
+                onClick={handleLoadMore}
+              >
+                {loadOlderError}
+              </button>
+            </div>
+          )}
+          {!loadingOlder && !loadOlderError && hasMore && (
             <div className="chat-load-older-indicator">
               <button
                 type="button"

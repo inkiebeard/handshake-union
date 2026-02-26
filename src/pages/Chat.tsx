@@ -21,6 +21,7 @@ export function Chat() {
     loadingOlder,
     hasMoreMessages,
     error,
+    loadOlderError,
     joinRoom,
     leaveRoom,
     loadOlderMessages,
@@ -168,6 +169,7 @@ export function Chat() {
             loading={loading}
             loadingOlder={loadingOlder}
             hasMore={hasMoreMessages}
+            loadOlderError={loadOlderError}
             imageDisplayMode={imageDisplayMode}
             onReply={handleReply}
             onDelete={handleDelete}

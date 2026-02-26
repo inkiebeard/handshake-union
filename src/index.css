@@ -439,6 +439,16 @@ strong {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
+.chat-load-older-btn--error {
+  color: #e05c5c;
+  border-color: #e05c5c;
+}
+
+.chat-load-older-btn--error:hover {
+  border-color: #e05c5c;
+  background: color-mix(in srgb, #e05c5c 10%, transparent);
+}
+
 .chat-empty {
   display: flex;
   align-items: center;
@@ -518,9 +528,27 @@ strong {
   display: block;
   max-width: 100%;
   max-height: 300px;
+  height: auto;
   border-radius: 4px;
   border: 1px solid var(--border);
   object-fit: contain;
+}
+
+.chat-message-image-skeleton {
+  width: 100%;
+  /* Match the max-height of .chat-message-img so the skeleton never undersizes the
+     space. Images can only be equal-to or shorter than this, meaning the DOM height
+     can only stay the same or shrink — never grow — after the image loads. */
+  height: 300px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.5; }
+  50%       { opacity: 0.9; }
 }
 
 .chat-message-image-error {
