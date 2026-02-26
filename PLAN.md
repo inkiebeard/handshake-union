@@ -16,7 +16,7 @@
 
 ## Coverage Status
 
-> Last updated: 2026-02-20
+> Last updated: 2026-02-27
 
 All six original MVP feature areas are built. Five of six implementation phases are complete. Phase 6 (Polish & Deploy) is in-flight — partial error handling and loading states exist, deployment config is live on Cloudflare Pages, but a formal test round and README polish remain.
 
@@ -39,6 +39,8 @@ All six original MVP feature areas are built. Five of six implementation phases 
 - Image URL attachments with blur/reveal mode (Feb 2026)
 - Members directory page with public stats
 - Cloudflare Pages deployment config
+- Message retention extended to 72 hours (Feb 2026)
+- Cursor-based chat pagination — 50 messages per page, scroll-to-top loads older history (Feb 2026)
 
 ---
 
@@ -60,12 +62,13 @@ Three rooms to start:
 
 **Chat Features:**
 - 72 hour message history max (ephemeral by design, cleanup via pg_cron)
+- Cursor-based pagination — loads most recent 50 messages on join, user scrolls to top to load older pages. Scroll position preserved when older messages are prepended.
 - Basic threading/replies (reply_to_id with visual indicator)
 - Emoji reactions (toggle on/off, picker UI)
 - Custom emotes via `:shortcode:` syntax (admin-managed)
 - Emoji autocomplete while typing
 - Shows pseudonym + PixelAvatar, not real identity
-- Real-time via Supabase broadcast triggers
+- Real-time via Supabase broadcast triggers (new messages appended live regardless of pagination state)
 - Message reporting (rate-limited, machine-copies content)
 - Delete own messages
 
@@ -131,57 +134,64 @@ Three-tier system via JWT `app_metadata` claims:
 ```
 handshake-union/
 ├── public/
-│   └── favicon.ico
+│   ├── handshake-union-logo.png
+│   └── handshake-union-logo-transparent.png
 ├── src/
 │   ├── components/
-│   │   ├── layout/
-│   │   │   ├── Navbar.tsx
-│   │   │   ├── Footer.tsx
-│   │   │   └── Layout.tsx
 │   │   ├── auth/
 │   │   │   └── ProtectedRoute.tsx
+│   │   ├── chat/
+│   │   │   ├── EmojiAutocomplete.tsx    # :emoji: autocomplete dropdown
+│   │   │   ├── GiphyPicker.tsx          # Giphy GIF search and insertion
+│   │   │   ├── Message.tsx              # single message with reactions + image
+│   │   │   ├── MessageErrorBoundary.tsx # per-message error boundary
+│   │   │   ├── MessageInput.tsx         # input with emoji autocomplete + Giphy
+│   │   │   ├── MessageList.tsx          # paginated scrollable message container
+│   │   │   └── ReactionPicker.tsx       # emoji picker for reactions
+│   │   ├── layout/
+│   │   │   ├── Footer.tsx
+│   │   │   ├── Layout.tsx
+│   │   │   └── Navbar.tsx
 │   │   ├── onboarding/
 │   │   │   └── OnboardingForm.tsx      # reusable in onboarding + profile modes
-│   │   ├── chat/
-│   │   │   ├── MessageList.tsx          # scrollable message container
-│   │   │   ├── MessageInput.tsx         # input with emoji autocomplete
-│   │   │   ├── Message.tsx              # single message with reactions
-│   │   │   ├── ReactionPicker.tsx       # emoji picker for reactions
-│   │   │   └── EmojiAutocomplete.tsx    # :emoji: autocomplete dropdown
-│   │   ├── stats/                       # Components inline in Stats.tsx
-│   │   │   ├── SalaryProgressionChart   # SVG line/area chart with role toggles
-│   │   │   ├── BarChart                 # Reusable distribution bar chart
-│   │   │   ├── GuardedBarChart          # BarChart with sample size guard
-│   │   │   └── SampleSizeGuard          # Reusable guard component
-│   │   └── PixelAvatar.tsx              # deterministic 5x5 pixel art avatars
+│   │   ├── stats/                      # directory reserved; stat components are
+│   │   │                               # defined inline in pages/Stats.tsx:
+│   │   │                               #   SalaryProgressionChart — SVG chart
+│   │   │                               #   BarChart — distribution bar chart
+│   │   │                               #   GuardedBarChart — BarChart + sample guard
+│   │   │                               #   SampleSizeGuard — privacy threshold guard
+│   │   └── PixelAvatar.tsx             # deterministic 5×5 pixel art avatars
 │   ├── contexts/
-│   │   ├── ChatContext.tsx             # chat state, messages, reactions, realtime
+│   │   ├── ChatContext.tsx             # chat state, pagination, reactions, realtime
 │   │   └── EmoteContext.tsx            # custom emote provider
 │   ├── hooks/
 │   │   ├── useAuth.ts
-│   │   ├── useProfile.ts
 │   │   ├── useCustomEmotes.ts          # custom emote fetching
-│   │   ├── useMessages.ts              # TODO: Phase 4 (legacy)
-│   │   ├── useStats.ts                 # aggregate stats + baselines + utilities
-│   │   └── useMembers.ts               # public member directory stats
+│   │   ├── useImageDisplayMode.ts      # per-session blur/reveal toggle state
+│   │   ├── useMembers.ts               # public member directory stats
+│   │   ├── useProfile.ts
+│   │   ├── useReactionHistory.ts       # persists recent emoji reactions to localStorage
+│   │   └── useStats.ts                 # aggregate stats + baselines + utilities
 │   ├── lib/
-│   │   ├── supabase.ts
 │   │   ├── constants.ts
-│   │   └── emoji.tsx                   # emoji rendering utilities
+│   │   ├── emoji.tsx                   # emoji rendering utilities
+│   │   └── supabase.ts
 │   ├── pages/
+│   │   ├── AuthCallback.tsx
+│   │   ├── Chat.tsx                    # full chat with rooms + realtime
 │   │   ├── Home.tsx
 │   │   ├── Login.tsx
-│   │   ├── AuthCallback.tsx
-│   │   ├── Chat.tsx                     # full chat with rooms + realtime
+│   │   ├── Members.tsx                 # public member directory
 │   │   ├── Onboarding.tsx
-│   │   ├── Profile.tsx                  # added — not in original plan
-│   │   ├── Stats.tsx                    # full stats dashboard with charts
-│   │   └── Members.tsx                  # public member directory
+│   │   ├── Privacy.tsx                 # privacy policy page
+│   │   ├── Profile.tsx
+│   │   └── Stats.tsx                   # full stats dashboard with charts
 │   ├── types/
 │   │   └── database.ts
 │   ├── App.tsx
+│   ├── index.css
 │   ├── main.tsx
-│   └── index.css
+│   └── vite-env.d.ts
 ├── supabase/
 │   ├── config.toml
 │   └── migrations/
@@ -206,19 +216,22 @@ handshake-union/
 │       ├── 019_fix_digest_search_path.sql
 │       ├── 020_fix_receipt_hash_separator.sql
 │       ├── 021_fix_verify_functions_hash.sql
-│       └── 022_update_message_retention_6h.sql
-├── index.html
-├── package.json
-├── tsconfig.json
-├── tsconfig.app.json
-├── tsconfig.node.json
-├── vite.config.ts
-├── wrangler.toml
+│       ├── 022_update_message_retention_6h.sql
+│       └── 023_update_message_retention_72h.sql
 ├── .env.example
 ├── .gitignore
+├── AGENTS.md
+├── eslint.config.js
+├── index.html
 ├── LICENSE (AGPL-3.0)
+├── package.json
 ├── PLAN.md
-└── README.md
+├── README.md
+├── tsconfig.app.json
+├── tsconfig.json
+├── tsconfig.node.json
+├── vite.config.ts
+└── wrangler.toml
 ```
 
 ---
@@ -233,7 +246,8 @@ handshake-union/
 012_fix_reactions_broadcast → 013_custom_emotes → 014_seed_baseline_stats →
 015_enable_cron_cleanup → 016_public_member_stats → 017_messages_image_url →
 018_image_url_integrity → 019_fix_digest_search_path → 020_fix_receipt_hash_separator →
-021_fix_verify_functions_hash → 022_update_message_retention_6h
+021_fix_verify_functions_hash → 022_update_message_retention_6h →
+023_update_message_retention_72h
 ```
 
 ### Tables
@@ -437,11 +451,12 @@ Two scheduled crons (requires pg_cron extension — commented in migration, run 
 ### Flow 3: Chat Participation
 ```
 1. Select room tab (general/memes/whinge)
-2. See last 72 hours of messages
-3. Real-time updates as new messages arrive
-4. Type message → send
-5. Click reactions on others' messages
-6. Reply to specific messages (optional)
+2. See most recent 50 messages (latest page loaded first)
+3. Scroll to top to load older messages — viewport stays anchored while history loads
+4. Real-time updates: new messages arrive and append to bottom regardless of scroll position
+5. Type message → send
+6. Click reactions on others' messages
+7. Reply to specific messages (optional)
 ```
 
 ### Flow 4: View Stats
@@ -523,7 +538,9 @@ Two scheduled crons (requires pg_cron extension — commented in migration, run 
 - [x] Report button on messages (calls `report_message()`)
 - [x] Message deletion (own messages only)
 - [x] PixelAvatar display per message author
-- [x] Message cleanup job (migration 015) — pg_cron schedules for message TTL + 30-day report TTL (TTL initially 1hr; updated to 6h via migration 022)
+- [x] Message cleanup job (migration 015) — pg_cron schedules for message TTL + 30-day report TTL (TTL initially 1hr; updated to 6h via 022; updated to 72h via 023)
+- [x] Cursor-based pagination — initial load fetches most recent 50 messages (DESC + reverse). Scroll to top triggers `loadOlderMessages()` which fetches the previous page using `created_at` as cursor. Scroll position preserved via scroll anchor. `PAGE_SIZE + 1` fetch trick used to detect whether another page exists without an extra round trip.
+- [x] Client-side expiry prune aligned to 72h TTL (was incorrectly set to 6h)
 
 ### Phase 5: Stats ✅ COMPLETE
 - [x] Stats page shell with placeholder layout
@@ -633,6 +650,16 @@ AGPL-3.0 — Ensures the code remains open even if someone forks and runs their 
 ## Changelog
 
 > Tracks scope changes, feature additions, and meaningful deviations from the original plan over the life of the project. Migrations and bug fixes are listed separately in `supabase/migrations/`.
+
+### 2026-02-27 — Cursor-based chat pagination
+- **Added:** `ChatContext` now fetches only the most recent 50 messages on room join (`PAGE_SIZE = 50`, `ORDER BY created_at DESC LIMIT PAGE_SIZE + 1`, reversed for display). The extra `+1` fetch is used to determine whether an older page exists without a separate count query.
+- **Added:** `loadOlderMessages()` — fetches the previous page using the oldest loaded `created_at` as a cursor (`lt('created_at', cursor)`). Prepends results to the message list.
+- **Added:** `hasMoreMessages` and `loadingOlder` states surfaced through `ChatContext` and `MessageList` props.
+- **Added:** Scroll-to-top detection in `MessageList` — triggers `loadOlderMessages()` automatically when the user scrolls within 80px of the top. A manual "↑ load older messages" button is also shown.
+- **Added:** Scroll anchor in `MessageList` — saves `{ scrollHeight, scrollTop }` before prepending and restores position via `useLayoutEffect` after the DOM commits, so the viewport stays anchored to the same message.
+- **Fixed:** Client-side expiry prune interval was incorrectly set to 6 hours (matching the old retention window). Now correctly aligned to 72 hours. Prune runs every 60 seconds (was 30).
+- **Rationale:** With 72-hour retention, loading all messages at once would be expensive and would degrade UX (especially on mobile). Pagination keeps the initial load fast and the DOM small.
+- **Affected:** `ChatContext.tsx`, `MessageList.tsx`, `Chat.tsx`, `index.css`.
 
 ### 2026-02-26 — Message retention extended: 6 hours → 72 hours
 - **Changed:** `cleanup-old-messages` cron interval updated from `6 hours` to `72 hours` (migration 023).
