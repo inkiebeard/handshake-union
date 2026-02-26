@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Message } from './Message';
 import { MessageErrorBoundary } from './MessageErrorBoundary';
 import type { Message as MessageType } from '../../types/database';
@@ -15,31 +15,41 @@ interface MessageListProps {
   currentUserId: string | undefined;
   reactions: ReactionMap;
   loading: boolean;
+  loadingOlder: boolean;
+  hasMore: boolean;
   imageDisplayMode: ImageDisplayMode;
   onReply: (message: MessageType) => void;
   onDelete: (id: string) => void;
   onReport: (id: string) => void;
   onReaction: (messageId: string, emoji: string) => void;
+  onLoadMore: () => void;
 }
 
 const NEAR_BOTTOM_THRESHOLD = 100;
+const NEAR_TOP_THRESHOLD = 80;
 
 export function MessageList({
   messages,
   currentUserId,
   reactions,
   loading,
+  loadingOlder,
+  hasMore,
   imageDisplayMode,
   onReply,
   onDelete,
   onReport,
   onReaction,
+  onLoadMore,
 }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<ResizeObserver | null>(null);
   const isNearBottomRef = useRef(true);
   const [showNewMessages, setShowNewMessages] = useState(false);
+
+  // Scroll anchor: saved before a load-older request so we can restore position after prepend
+  const scrollAnchorRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
 
   const scrollToBottom = (smooth = true) => {
     const el = containerRef.current;
@@ -65,11 +75,40 @@ export function MessageList({
     return el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_THRESHOLD;
   };
 
+  // Save scroll position, then ask the context for older messages
+  const handleLoadMore = () => {
+    if (!containerRef.current || scrollAnchorRef.current) return;
+    scrollAnchorRef.current = {
+      scrollHeight: containerRef.current.scrollHeight,
+      scrollTop: containerRef.current.scrollTop,
+    };
+    onLoadMore();
+  };
+
   const handleScroll = () => {
-    const near = checkNearBottom();
+    const el = containerRef.current;
+    if (!el) return;
+
+    const near = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_THRESHOLD;
     isNearBottomRef.current = near;
     if (near) setShowNewMessages(false);
+
+    // Trigger pagination when the user scrolls close to the top
+    if (el.scrollTop < NEAR_TOP_THRESHOLD && hasMore && !loadingOlder) {
+      handleLoadMore();
+    }
   };
+
+  // After older messages are prepended (loadingOlder just became false), restore scroll position
+  // so the viewport stays anchored to the same message the user was looking at.
+  useLayoutEffect(() => {
+    if (!loadingOlder && scrollAnchorRef.current && containerRef.current) {
+      const { scrollHeight: prevScrollHeight, scrollTop: prevScrollTop } = scrollAnchorRef.current;
+      const diff = containerRef.current.scrollHeight - prevScrollHeight;
+      containerRef.current.scrollTop = prevScrollTop + diff;
+      scrollAnchorRef.current = null;
+    }
+  }, [loadingOlder]);
 
   // When new messages arrive: auto-scroll if at bottom, otherwise show banner
   useEffect(() => {
@@ -139,22 +178,38 @@ export function MessageList({
     <div className="chat-message-list-wrapper">
       <div className="chat-message-list" ref={containerRef} onScroll={handleScroll}>
         <div ref={innerRef}>
-        {messages.map((msg) => (
-          <MessageErrorBoundary key={msg.id} messageId={msg.id}>
-            <Message
-              message={msg}
-              currentUserId={currentUserId}
-              reactions={reactions.get(msg.id) ?? new Map()}
-              replyTarget={msg.reply_to_id ? messageMap.get(msg.reply_to_id) : undefined}
-              imageDisplayMode={imageDisplayMode}
-              onReply={onReply}
-              onDelete={onDelete}
-              onReport={onReport}
-              onReaction={onReaction}
-              onImageLoad={handleImageLoad}
-            />
-          </MessageErrorBoundary>
-        ))}
+          {loadingOlder && (
+            <div className="chat-load-older-indicator">
+              <span className="comment">loading older messages...</span>
+            </div>
+          )}
+          {!loadingOlder && hasMore && (
+            <div className="chat-load-older-indicator">
+              <button
+                type="button"
+                className="chat-load-older-btn"
+                onClick={handleLoadMore}
+              >
+                &#8593; load older messages
+              </button>
+            </div>
+          )}
+          {messages.map((msg) => (
+            <MessageErrorBoundary key={msg.id} messageId={msg.id}>
+              <Message
+                message={msg}
+                currentUserId={currentUserId}
+                reactions={reactions.get(msg.id) ?? new Map()}
+                replyTarget={msg.reply_to_id ? messageMap.get(msg.reply_to_id) : undefined}
+                imageDisplayMode={imageDisplayMode}
+                onReply={onReply}
+                onDelete={onDelete}
+                onReport={onReport}
+                onReaction={onReaction}
+                onImageLoad={handleImageLoad}
+              />
+            </MessageErrorBoundary>
+          ))}
         </div>
       </div>
 

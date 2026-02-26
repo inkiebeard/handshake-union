@@ -3,14 +3,19 @@ import { supabase } from '../lib/supabase';
 import type { ChatRoom, Message, Reaction } from '../types/database';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
+const PAGE_SIZE = 50;
+
 interface ChatContextValue {
   messages: Message[];
   reactions: Reaction[];
   loading: boolean;
+  loadingOlder: boolean;
+  hasMoreMessages: boolean;
   error: string | null;
   currentRoom: ChatRoom | null;
   joinRoom: (room: ChatRoom) => void;
   leaveRoom: (room: ChatRoom) => void;
+  loadOlderMessages: () => Promise<void>;
   sendMessage: (content: string, imageUrl?: string | null, replyToId?: string) => Promise<void>;
   deleteMessage: (id: string) => Promise<void>;
   reportMessage: (id: string, reason?: string) => Promise<string>;
@@ -24,8 +29,13 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
   const [messages, setMessages] = useState<Message[]>([]);
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentRoom, setCurrentRoom] = useState<ChatRoom | null>(null);
+
+  // Ref to the created_at of the oldest loaded message — used as cursor for pagination
+  const oldestCreatedAtRef = useRef<string | undefined>(undefined);
 
   // Ref to hold active channel (single channel per room for both messages and reactions)
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -62,19 +72,19 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
     [resolvePseudonym]
   );
 
-  // Fetch messages for a room
+  // Fetch the most recent PAGE_SIZE messages for a room
   const fetchMessages = useCallback(async (room: ChatRoom) => {
     setLoading(true);
     setError(null);
+    setHasMoreMessages(false);
 
-    const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
-
+    // Fetch one extra row — if we get PAGE_SIZE + 1 back, there are older messages waiting.
     const { data, error: fetchError } = await supabase
       .from('messages')
       .select('*')
       .eq('room', room)
-      .gte('created_at', sixHoursAgo)
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: false })
+      .limit(PAGE_SIZE + 1);
 
     if (fetchError) {
       setError(fetchError.message);
@@ -82,10 +92,49 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
       return;
     }
 
-    const withPseudonyms = await attachPseudonyms(data ?? []);
+    const hasMore = (data ?? []).length > PAGE_SIZE;
+    const page = (data ?? []).slice(0, PAGE_SIZE).reverse(); // flip to ascending for display
+    const withPseudonyms = await attachPseudonyms(page);
+
     setMessages(withPseudonyms);
+    oldestCreatedAtRef.current = withPseudonyms[0]?.created_at;
+    setHasMoreMessages(hasMore);
     setLoading(false);
   }, [attachPseudonyms]);
+
+  // Load the next page of older messages (prepend to list)
+  const loadOlderMessages = useCallback(async () => {
+    if (!currentRoom || loadingOlder) return;
+    const cursor = oldestCreatedAtRef.current;
+    if (!cursor) return;
+
+    setLoadingOlder(true);
+
+    // Fetch one extra row to know if an older page exists beyond this one.
+    const { data, error: fetchError } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('room', currentRoom)
+      .lt('created_at', cursor)
+      .order('created_at', { ascending: false })
+      .limit(PAGE_SIZE + 1);
+
+    if (fetchError) {
+      setLoadingOlder(false);
+      return;
+    }
+
+    const hasMore = (data ?? []).length > PAGE_SIZE;
+    const page = (data ?? []).slice(0, PAGE_SIZE).reverse();
+    const withPseudonyms = await attachPseudonyms(page);
+
+    setMessages((prev) => [...withPseudonyms, ...prev]);
+    if (withPseudonyms.length > 0) {
+      oldestCreatedAtRef.current = withPseudonyms[0].created_at;
+    }
+    setHasMoreMessages(hasMore);
+    setLoadingOlder(false);
+  }, [currentRoom, loadingOlder, attachPseudonyms]);
 
   // Fetch reactions for visible messages
   const fetchReactions = useCallback(async (messageIds: string[]) => {
@@ -114,6 +163,8 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
     setCurrentRoom(null);
     setMessages([]);
     setReactions([]);
+    setHasMoreMessages(false);
+    oldestCreatedAtRef.current = undefined;
   }, []);
 
   // Join a chat room (subscribe to realtime via broadcast)
@@ -211,12 +262,12 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
     }
   }, [messages, fetchReactions]);
 
-  // Prune expired messages every 30 seconds
+  // Prune expired messages every minute (72-hour TTL matches server-side retention)
   useEffect(() => {
     const interval = setInterval(() => {
-      const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
-      setMessages((prev) => prev.filter((m) => m.created_at >= sixHoursAgo));
-    }, 30_000);
+      const seventyTwoHoursAgo = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
+      setMessages((prev) => prev.filter((m) => m.created_at >= seventyTwoHoursAgo));
+    }, 60_000);
     return () => clearInterval(interval);
   }, []);
 
@@ -300,10 +351,13 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
     messages,
     reactions,
     loading,
+    loadingOlder,
+    hasMoreMessages,
     error,
     currentRoom,
     joinRoom,
     leaveRoom,
+    loadOlderMessages,
     sendMessage,
     deleteMessage,
     reportMessage,
