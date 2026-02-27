@@ -19,9 +19,19 @@ Handshake Union is a refuge. A place to compare notes, vent, and to go back to t
 
 ---
 
+## On AI
+
+> *isn't this site built with the use of AI?*
+
+Yes.
+
+While concerns around AI use are valid, we need to face AI's challenges head-on. Ignoring AI's usefulness invites harm and will leave us all at a disadvantage. The project's goal is to use AI to strengthen community efforts. To use AI to serve people, not profit. Let's use & build tools to empower, not exploit & replace.
+
+---
+
 ## What it does
 
-- **Anonymous chat** — three rooms (`#general`, `#memes`, `#whinge`) with 72-hour ephemeral messages. Supports image attachments (blur-by-default), emoji reactions, custom emotes, and reply threading. No logs, just anonymous cryptographic receipts of message integrity. Receipts help to prove or disprove a message existed (or didn't) without retaining it. Receipts are also used to report messages that violate the code of conduct.
+- **Anonymous chat** — three rooms (`#general`, `#memes`, `#whinge`) with 72-hour ephemeral messages. Loads the most recent 50 messages on join; scroll to the top to page back through history. Supports image attachments (blur-by-default), emoji reactions, custom emotes, and reply threading. No logs, just anonymous cryptographic receipts of message integrity. Receipts help to prove or disprove a message existed (or didn't) without retaining it. Receipts are also used to report messages that violate the code of conduct.
 - **Salary & conditions data** — share your band, role, experience, WFH status and employment type. All optional. All aggregate-only — no individual data is ever exposed.
 - **Stats dashboard** — see salary distributions, role breakdowns, WFH trends, and compare against industry baselines. Salary data hidden until we have enough members to protect privacy (n≥30).
 - **Pseudonymous identity** — you're auto-assigned a pseudonym like `worker_a7f3b2`. You can rename it. Nobody knows who you really are (unless you want to tell them).
@@ -126,6 +136,7 @@ supabase/migrations/
   020_fix_receipt_hash_separator.sql
   021_fix_verify_functions_hash.sql
   022_update_message_retention_6h.sql
+  023_update_message_retention_72h.sql
 ```
 
 For message cleanup (72-hour TTL), you'll need to activate `pg_cron` in your Supabase project (Database → Extensions → pg_cron) and run the cron setup from migration 015, then apply migrations 022 and 023 to set the correct retention interval.

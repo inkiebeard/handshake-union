@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { PixelAvatar } from "../PixelAvatar";
 import { ReactionPicker } from "./ReactionPicker";
 import { EmojiText, getEmoji } from "../../lib/emoji";
+import { imagePreloadCache, preloadImage } from "../../lib/imagePreloadCache";
 import type { Message as MessageType } from "../../types/database";
 import type { ImageDisplayMode } from "../../hooks/useImageDisplayMode";
 
@@ -59,38 +60,78 @@ function ReactionDisplay({ code }: { code: string }) {
   return <span>{code}</span>;
 }
 
+type ImageLoadState = "loading" | "ready" | "error";
+
 function MessageImage({ url, mode, onLoad }: { url: string; mode: ImageDisplayMode; onLoad: () => void }) {
   const [manuallyRevealed, setManuallyRevealed] = useState(false);
-  const [hasError, setHasError] = useState(false);
   const isRevealed = mode === "full" || manuallyRevealed;
+
+  // Lazily initialise from the preload cache populated by ChatContext before the DOM
+  // mutation. If the image was pre-warmed we go straight to 'ready' on the first render,
+  // skipping the skeleton entirely — the <img> is painted at its correct intrinsic size
+  // with no subsequent layout shift, so the scroll-anchor restoration stays accurate.
+  const [loadState, setLoadState] = useState<ImageLoadState>(() =>
+    isRevealed && imagePreloadCache.has(url) ? "ready" : "loading"
+  );
+  const [size, setSize] = useState<{ w: number; h: number } | null>(() => {
+    if (!isRevealed) return null;
+    const cached = imagePreloadCache.get(url);
+    return cached ? { w: cached.naturalWidth, h: cached.naturalHeight } : null;
+  });
 
   // Reset per-image reveal when global mode switches back to blurred
   useEffect(() => {
     if (mode === "blurred") {
       setManuallyRevealed(false);
-      setHasError(false);
     }
   }, [mode]);
 
-  return (
-    <div className={`chat-message-image${isRevealed ? " is-revealed" : ""}`}>
-      {isRevealed ? (
-        hasError ? (
-          <div className="chat-message-image-error">
-            ⚠ could not load image
-          </div>
-        ) : (
-          <img
-            src={url}
-            alt="attached image"
-            className="chat-message-img"
-            referrerPolicy="no-referrer"
-            loading="lazy"
-            onLoad={onLoad}
-            onError={() => setHasError(true)}
-          />
-        )
-      ) : (
+  // Keep onLoad stable inside effects without re-triggering the preload
+  const onLoadRef = useRef(onLoad);
+  useEffect(() => { onLoadRef.current = onLoad; }, [onLoad]);
+
+  // Track whether onLoad has been fired for this image (avoid duplicate calls)
+  const onLoadFiredRef = useRef(loadState === "ready");
+  useEffect(() => { onLoadFiredRef.current = false; }, [url]);
+
+  // Notify MessageList when the image becomes ready (triggers auto-scroll when near bottom)
+  useEffect(() => {
+    if (isRevealed && loadState === "ready" && !onLoadFiredRef.current) {
+      onLoadFiredRef.current = true;
+      onLoadRef.current();
+    }
+  }, [isRevealed, loadState]);
+
+  // Start preloading when the image becomes revealed and isn't already cached
+  useEffect(() => {
+    if (!isRevealed || loadState !== "loading") return;
+
+    // Re-check cache: another component may have loaded the same URL while we were loading
+    const cached = imagePreloadCache.get(url);
+    if (cached) {
+      setSize({ w: cached.naturalWidth, h: cached.naturalHeight });
+      setLoadState("ready");
+      return;
+    }
+
+    let cancelled = false;
+    preloadImage(url).then(() => {
+      if (cancelled) return;
+      const dims = imagePreloadCache.get(url);
+      if (dims) {
+        setSize({ w: dims.naturalWidth, h: dims.naturalHeight });
+        setLoadState("ready");
+      } else {
+        setLoadState("error");
+      }
+    });
+
+    return () => { cancelled = true; };
+  }, [isRevealed, url, loadState]);
+
+  if (!isRevealed) {
+    return (
+      <div className="chat-message-image">
         <button
           type="button"
           className="chat-image-reveal-btn"
@@ -99,7 +140,39 @@ function MessageImage({ url, mode, onLoad }: { url: string; mode: ImageDisplayMo
           <span className="chat-image-reveal-icon">&#128248;</span>
           <span>image attached — click to reveal</span>
         </button>
-      )}
+      </div>
+    );
+  }
+
+  if (loadState === "loading") {
+    return (
+      <div className="chat-message-image">
+        <div className="chat-message-image-skeleton" />
+      </div>
+    );
+  }
+
+  if (loadState === "error") {
+    return (
+      <div className="chat-message-image">
+        <div className="chat-message-image-error">&#9888; could not load image</div>
+      </div>
+    );
+  }
+
+  // Image is in the browser cache; the <img> renders at its correct intrinsic size
+  // immediately. Explicit width/height attrs + CSS max-width/height:auto let the browser
+  // reserve the correct space without needing to decode the image again.
+  return (
+    <div className="chat-message-image is-revealed">
+      <img
+        src={url}
+        alt="attached image"
+        className="chat-message-img"
+        referrerPolicy="no-referrer"
+        width={size?.w}
+        height={size?.h}
+      />
     </div>
   );
 }

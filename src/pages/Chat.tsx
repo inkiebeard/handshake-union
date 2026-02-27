@@ -18,9 +18,13 @@ export function Chat() {
     messages,
     reactions: rawReactions,
     loading,
+    loadingOlder,
+    hasMoreMessages,
     error,
+    loadOlderError,
     joinRoom,
     leaveRoom,
+    loadOlderMessages,
     sendMessage,
     deleteMessage,
     reportMessage,
@@ -163,11 +167,15 @@ export function Chat() {
             currentUserId={user?.id}
             reactions={reactions}
             loading={loading}
+            loadingOlder={loadingOlder}
+            hasMore={hasMoreMessages}
+            loadOlderError={loadOlderError}
             imageDisplayMode={imageDisplayMode}
             onReply={handleReply}
             onDelete={handleDelete}
             onReport={handleReport}
             onReaction={handleReaction}
+            onLoadMore={loadOlderMessages}
           />
 
           <MessageInput

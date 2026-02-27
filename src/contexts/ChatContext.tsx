@@ -1,16 +1,23 @@
 import { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { preloadImages } from '../lib/imagePreloadCache';
 import type { ChatRoom, Message, Reaction } from '../types/database';
 import type { RealtimeChannel } from '@supabase/supabase-js';
+
+const PAGE_SIZE = 50;
 
 interface ChatContextValue {
   messages: Message[];
   reactions: Reaction[];
   loading: boolean;
+  loadingOlder: boolean;
+  hasMoreMessages: boolean;
   error: string | null;
+  loadOlderError: string | null;
   currentRoom: ChatRoom | null;
   joinRoom: (room: ChatRoom) => void;
   leaveRoom: (room: ChatRoom) => void;
+  loadOlderMessages: () => Promise<void>;
   sendMessage: (content: string, imageUrl?: string | null, replyToId?: string) => Promise<void>;
   deleteMessage: (id: string) => Promise<void>;
   reportMessage: (id: string, reason?: string) => Promise<string>;
@@ -24,8 +31,26 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
   const [messages, setMessages] = useState<Message[]>([]);
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadOlderError, setLoadOlderError] = useState<string | null>(null);
   const [currentRoom, setCurrentRoom] = useState<ChatRoom | null>(null);
+
+  // Composite cursor for pagination: both created_at and id of the oldest loaded message.
+  // Using only created_at is unsafe — multiple rows can share the same timestamp (bursty
+  // traffic, batch inserts), so a single-column .lt cursor silently skips those rows.
+  // (created_at < T) OR (created_at = T AND id < cursor_id) with ORDER BY created_at DESC,
+  // id DESC gives a fully-stable, gap-free page boundary regardless of timestamp collisions.
+  const oldestCursorRef = useRef<{ created_at: string; id: string } | undefined>(undefined);
+
+  // Mirrors currentRoom state synchronously so loadOlderMessages can detect stale responses
+  // after an async fetch without closing over a potentially-stale state value.
+  const activeRoomRef = useRef<ChatRoom | null>(null);
+
+  // Mirrors loadingOlder state synchronously so the guard in loadOlderMessages doesn't need
+  // loadingOlder in its dependency array (which would cause unnecessary callback churn).
+  const loadingOlderRef = useRef(false);
 
   // Ref to hold active channel (single channel per room for both messages and reactions)
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -62,19 +87,22 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
     [resolvePseudonym]
   );
 
-  // Fetch messages for a room
+  // Fetch the most recent PAGE_SIZE messages for a room
   const fetchMessages = useCallback(async (room: ChatRoom) => {
     setLoading(true);
     setError(null);
+    setHasMoreMessages(false);
 
-    const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
-
+    // Fetch one extra row — if we get PAGE_SIZE + 1 back, there are older messages waiting.
+    // Secondary sort on id gives a stable, deterministic order when multiple messages share
+    // the same created_at timestamp, which is required for the composite cursor to work.
     const { data, error: fetchError } = await supabase
       .from('messages')
       .select('*')
       .eq('room', room)
-      .gte('created_at', sixHoursAgo)
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(PAGE_SIZE + 1);
 
     if (fetchError) {
       setError(fetchError.message);
@@ -82,10 +110,93 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
       return;
     }
 
-    const withPseudonyms = await attachPseudonyms(data ?? []);
+    const hasMore = (data ?? []).length > PAGE_SIZE;
+    const page = (data ?? []).slice(0, PAGE_SIZE).reverse(); // flip to ascending for display
+    const withPseudonyms = await attachPseudonyms(page);
+
     setMessages(withPseudonyms);
+    const oldest = withPseudonyms[0];
+    oldestCursorRef.current = oldest ? { created_at: oldest.created_at, id: oldest.id } : undefined;
+    setHasMoreMessages(hasMore);
     setLoading(false);
   }, [attachPseudonyms]);
+
+  // Load the next page of older messages (prepend to list)
+  const loadOlderMessages = useCallback(async () => {
+    // Use refs for guards so this callback doesn't need currentRoom/loadingOlder in its
+    // dep array — prevents unnecessary recreation on every loadingOlder state toggle.
+    const room = activeRoomRef.current;
+    if (!room || loadingOlderRef.current) return;
+    const cursor = oldestCursorRef.current;
+    if (!cursor) return;
+
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    setLoadOlderError(null);
+
+    // Composite cursor: (created_at < T) OR (created_at = T AND id < cursor_id).
+    // This is safe even when multiple messages share the same timestamp — a plain
+    // .lt('created_at', T) would permanently skip any same-timestamp rows that fell
+    // past the page boundary.  Secondary id sort must match the ORDER BY below.
+    const { data, error: fetchError } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('room', room)
+      .or(`created_at.lt.${cursor.created_at},and(created_at.eq.${cursor.created_at},id.lt.${cursor.id})`)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(PAGE_SIZE + 1);
+
+    if (fetchError) {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+      setLoadOlderError('failed to load older messages — tap to retry');
+      return;
+    }
+
+    // Discard if the user switched rooms while the fetch was in-flight.
+    if (activeRoomRef.current !== room) {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+      return;
+    }
+
+    const hasMore = (data ?? []).length > PAGE_SIZE;
+    const page = (data ?? []).slice(0, PAGE_SIZE).reverse();
+    const withPseudonyms = await attachPseudonyms(page);
+
+    // Guard again after the async pseudonym resolution pass.
+    if (activeRoomRef.current !== room) {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+      return;
+    }
+
+    // Pre-warm the browser image cache before the DOM mutation.
+    // When <img> elements are first painted they will render from cache at their
+    // correct intrinsic size — MessageImage reads the cache on lazy init and skips
+    // the loading skeleton entirely, so no post-paint layout shifts corrupt the
+    // scroll-anchor restoration.
+    const imageUrls = withPseudonyms.filter(m => m.image_url).map(m => m.image_url!);
+    if (imageUrls.length > 0) {
+      await preloadImages(imageUrls);
+      // Guard once more: preloading is async and a room switch could have happened.
+      if (activeRoomRef.current !== room) {
+        loadingOlderRef.current = false;
+        setLoadingOlder(false);
+        return;
+      }
+    }
+
+    setMessages((prev) => [...withPseudonyms, ...prev]);
+    if (withPseudonyms.length > 0) {
+      const oldest = withPseudonyms[0];
+      oldestCursorRef.current = { created_at: oldest.created_at, id: oldest.id };
+    }
+    setHasMoreMessages(hasMore);
+    loadingOlderRef.current = false;
+    setLoadingOlder(false);
+  }, [attachPseudonyms]); // currentRoom and loadingOlder intentionally omitted — accessed via refs
 
   // Fetch reactions for visible messages
   const fetchReactions = useCallback(async (messageIds: string[]) => {
@@ -111,9 +222,13 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
       channelRef.current = null;
     }
 
+    activeRoomRef.current = null;
     setCurrentRoom(null);
     setMessages([]);
     setReactions([]);
+    setHasMoreMessages(false);
+    setLoadOlderError(null);
+    oldestCursorRef.current = undefined;
   }, []);
 
   // Join a chat room (subscribe to realtime via broadcast)
@@ -127,6 +242,7 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
       channelRef.current = null;
     }
 
+    activeRoomRef.current = room;
     setCurrentRoom(room);
     fetchMessages(room);
 
@@ -211,12 +327,19 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
     }
   }, [messages, fetchReactions]);
 
-  // Prune expired messages every 30 seconds
+  // Prune expired messages every minute (72-hour TTL matches server-side retention).
+  // Also keeps oldestCursorRef aligned with the actual oldest in-memory message so
+  // the pagination cursor doesn't point to a row that no longer exists in the client state.
   useEffect(() => {
     const interval = setInterval(() => {
-      const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
-      setMessages((prev) => prev.filter((m) => m.created_at >= sixHoursAgo));
-    }, 30_000);
+      const seventyTwoHoursAgo = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
+      setMessages((prev) => {
+        const remaining = prev.filter((m) => m.created_at >= seventyTwoHoursAgo);
+        const oldest = remaining[0];
+        oldestCursorRef.current = oldest ? { created_at: oldest.created_at, id: oldest.id } : undefined;
+        return remaining;
+      });
+    }, 60_000);
     return () => clearInterval(interval);
   }, []);
 
@@ -300,10 +423,14 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
     messages,
     reactions,
     loading,
+    loadingOlder,
+    hasMoreMessages,
     error,
+    loadOlderError,
     currentRoom,
     joinRoom,
     leaveRoom,
+    loadOlderMessages,
     sendMessage,
     deleteMessage,
     reportMessage,
