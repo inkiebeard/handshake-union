@@ -44,19 +44,6 @@ export function Login() {
     }
   };
 
-  const handleOAuth = async (provider: 'github' | 'gitlab') => {
-    const { error: authError } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-
-    if (authError) {
-      setError(authError.message);
-    }
-  };
-
   if (submitted) {
     return (
       <section className="section">
@@ -80,7 +67,7 @@ export function Login() {
         <div className="columns is-centered">
           <div className="column is-5">
             <p className="prompt">authenticate</p>
-            <p className="comment">no passwords. just a magic link or oauth.</p>
+            <p className="comment">no passwords. just a magic link.</p>
 
             <br />
 
@@ -118,23 +105,6 @@ export function Login() {
                 </div>
               </div>
             </form>
-
-            <hr className="term-divider" />
-
-            <p className="comment">or use oauth</p>
-            <br />
-            <div className="field is-grouped">
-              <div className="control">
-                <button className="button is-dark" onClick={() => handleOAuth('github')}>
-                  github
-                </button>
-              </div>
-              <div className="control">
-                <button className="button is-link" onClick={() => handleOAuth('gitlab')}>
-                  gitlab
-                </button>
-              </div>
-            </div>
 
             <br />
             <p className="comment">you'll be assigned a pseudonym. identity stays hidden.</p>

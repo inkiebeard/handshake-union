@@ -137,6 +137,11 @@ supabase/migrations/
   021_fix_verify_functions_hash.sql
   022_update_message_retention_6h.sql
   023_update_message_retention_72h.sql
+  024_image_url_domain_allowlist.sql
+  025_custom_emotes_auth_only.sql
+  026_country_check_constraint.sql
+  027_message_rate_limit.sql
+  028_pseudonym_oracle_guard.sql
 ```
 
 For message cleanup (72-hour TTL), you'll need to activate `pg_cron` in your Supabase project (Database → Extensions → pg_cron) and run the cron setup from migration 015, then apply migrations 022 and 023 to set the correct retention interval.
@@ -151,13 +156,18 @@ npm run dev
 
 ## Security model
 
-- **No passwords** — magic links and OAuth only
+- **No passwords, no OAuth** — magic links only. OAuth providers are disabled; no real-identity metadata is ever sent to Supabase.
 - **Pseudonymous by default** — real identity is never stored or exposed
 - **Row Level Security** — all data access enforced at the database level
 - **Profiles are private** — users can only read their own profile row; stats are exposed via aggregate functions only
-- **Ephemeral messages** — deleted after 72 hours
+- **Pseudonym oracle hardened** — `get_pseudonym()` only resolves users who have sent at least one message, preventing cold UUID enumeration
+- **Ephemeral messages** — deleted after 72 hours; rate-limited to 10 messages per minute per user at the DB level
+- **Image URL domain allowlist** — attached images must come from approved CDN providers (GIPHY, Tenor, Imgur). Enforced by a DB `CHECK` constraint and client-side validation. Add providers via `ALLOWED_IMAGE_PROVIDERS` in `src/lib/constants.ts` + a migration.
 - **Cryptographic receipts** — SHA-256 hash of every message stored automatically. No readable content, invisible to all user-facing roles. Enables tamper-evident screenshot verification without retaining message content.
 - **Moderation reports** — machine-copy content from the database (never user-provided), linked to receipts for tamper-evident verification, hard-deleted after 30 days
+- **Custom emotes authenticated-only** — the `anon` role has no access to any endpoint
+- **Country field validated** — `CHECK` constraint on `profiles` and `profile_snapshots` enforces the allowed values at the DB level
+- **Content Security Policy** — strict CSP, `X-Frame-Options`, `Referrer-Policy`, and `Permissions-Policy` headers served via `public/_headers` (Cloudflare Pages)
 - **Search path hardened** — all DB functions use `SET search_path = ''`
 - **Open source** — the code is auditable. If the privacy model is wrong, you can see exactly where.
 

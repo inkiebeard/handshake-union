@@ -70,6 +70,22 @@ export const ROLE_TITLE_LABELS: Record<RoleTitle, string> = {
 
 export const COUNTRY_OPTIONS = ['Australia', 'New Zealand', 'Other'] as const;
 
+// ============================================
+// Allowed image attachment domains
+// ============================================
+// Add a provider by appending its second-level domain to ALLOWED_IMAGE_PROVIDERS.
+// The regex is built automatically — no other client-side change needed.
+// Also create a new migration to update the DB CHECK constraint to match.
+//
+// Allowed subdomain prefixes: media / media<N> / i / c
+// Allowed TLD: any (2+ letters)
+export const ALLOWED_IMAGE_PROVIDERS = ['giphy', 'tenor', 'imgur'] as const;
+
+export const ALLOWED_IMAGE_HOSTNAME_RE = new RegExp(
+  `^(media\\d*|i|c)\\.(${ALLOWED_IMAGE_PROVIDERS.join('|')})\\.[a-z]{2,}$`,
+  'i'
+);
+
 export const CHAT_ROOMS: { id: ChatRoom; label: string; description: string }[] = [
   { id: 'general', label: '#general', description: 'Main discussion' },
   { id: 'memes', label: '#memes', description: 'Shitposting & levity' },

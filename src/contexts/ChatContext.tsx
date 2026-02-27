@@ -254,7 +254,6 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
       .channel(channelName, { config: { private: true } })
       // Message INSERT events
       .on('broadcast', { event: 'INSERT' }, async (payload) => {
-        console.log('Broadcast INSERT received:', payload);
         // Check if this is a message (has room field) or reaction (has message_id field)
         const record = payload.payload?.record || payload.payload;
         
@@ -283,7 +282,6 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
       })
       // Message/Reaction DELETE events
       .on('broadcast', { event: 'DELETE' }, (payload) => {
-        console.log('Broadcast DELETE received:', payload);
         const record = payload.payload?.old_record || payload.payload?.record || payload.payload;
         
         if (record && record.id) {
@@ -294,7 +292,6 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
       })
       // Message UPDATE events (if needed)
       .on('broadcast', { event: 'UPDATE' }, async (payload) => {
-        console.log('Broadcast UPDATE received:', payload);
         const record = payload.payload?.record || payload.payload;
         
         if (record && 'room' in record) {
@@ -309,11 +306,8 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
           setMessages((prev) => prev.map((m) => m.id === enriched.id ? enriched : m));
         }
       })
-      .subscribe((status, err) => {
-        console.log('Room subscription status:', status, err);
-        if (status === 'SUBSCRIBED') {
-          console.log(`Successfully subscribed to ${channelName}`);
-        }
+      .subscribe((_status, _err) => {
+        // Subscription lifecycle — no logging to avoid leaking room/payload data
       });
 
     channelRef.current = channel;

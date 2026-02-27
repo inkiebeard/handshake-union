@@ -4,6 +4,7 @@ import { GiphyPicker, fireGiphyAnalytics } from './GiphyPicker';
 import { EmojiText } from '../../lib/emoji';
 import type { Emoji } from '../../lib/emoji';
 import type { Message } from '../../types/database';
+import { ALLOWED_IMAGE_HOSTNAME_RE, ALLOWED_IMAGE_PROVIDERS } from '../../lib/constants';
 
 const SHORTCODE_REGEX = /:([a-zA-Z0-9_+-]+):/;
 function hasEmojiShortcodes(content: string): boolean {
@@ -11,12 +12,10 @@ function hasEmojiShortcodes(content: string): boolean {
 }
 
 function isValidImageUrl(url: string): boolean {
-  if (url.length > 2048) {
-    return false;
-  }
+  if (url.length > 2048) return false;
   try {
     const parsed = new URL(url);
-    return parsed.protocol === 'https:';
+    return parsed.protocol === 'https:' && ALLOWED_IMAGE_HOSTNAME_RE.test(parsed.hostname);
   } catch {
     return false;
   }
@@ -232,7 +231,9 @@ export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: Messa
             </button>
           </div>
           {imageUrlInvalid && (
-            <span className="chat-image-url-error">must be a valid https:// url</span>
+            <span className="chat-image-url-error">
+              allowed: {ALLOWED_IMAGE_PROVIDERS.join(', ')} — e.g. https://media.tenor.com/…
+            </span>
           )}
         </div>
       )}

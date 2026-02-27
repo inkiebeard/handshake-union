@@ -27,7 +27,7 @@ This is an anonymous developer solidarity platform. Every decision should reinfo
 - **Hooks for state and data.** Custom hooks live in `src/hooks/` (e.g. `useAuth`, `useProfile`, `useStats`, `useMessages`, `useMembers`, `useCustomEmotes`).
 - **Contexts for shared state.** `ChatContext` manages chat state + realtime subscriptions. `EmoteContext` provides custom emotes.
 - **Types in `src/types/database.ts`.** All DB row types, enums, and moderation types are defined here. Keep them in sync with the Supabase schema.
-- **Constants in `src/lib/constants.ts`.** Human-readable labels for all enum values. If you add an enum variant to the DB, add its label here.
+- **Constants in `src/lib/constants.ts`.** Human-readable labels for all enum values. If you add an enum variant to the DB, add its label here. Also owns `ALLOWED_IMAGE_PROVIDERS` (the authoritative list of permitted image CDN domains) and `ALLOWED_IMAGE_HOSTNAME_RE` (the compiled regex used in `isValidImageUrl()`). Adding a new image provider requires updating this list and creating a migration to update the `messages_image_url_check` DB constraint.
 - **Pages in `src/pages/`.** One file per route. Protected routes wrap with `<ProtectedRoute>`.
 - **Components colocated by domain.** `components/chat/`, `components/auth/`, `components/layout/`, `components/onboarding/`, `components/stats/`.
 
@@ -43,14 +43,14 @@ This is an anonymous developer solidarity platform. Every decision should reinfo
 - **Supabase is the entire backend.** No custom API server. Auth, Postgres, Realtime, and RLS handle everything.
 - **Row Level Security enforces access control.** Profiles are own-row-only reads. Messages are authenticated-read, own-write. Receipts deny ALL for authenticated users. Never bypass RLS from the frontend.
 - **Aggregate functions for stats.** Individual profile data is never exposed. All stats go through `get_salary_distribution()`, `get_role_distribution()`, etc.
-- **Migrations are sequential and numbered.** `supabase/migrations/001_*.sql` through `022_*.sql`. New migrations continue the sequence.
+- **Migrations are sequential and numbered.** `supabase/migrations/001_*.sql` through `031_*.sql`. New migrations continue the sequence.
 - **All DB functions use `SET search_path = ''`.** This is a security requirement — prevents search path injection.
 - **Three-tier RBAC.** `member` (default) / `moderator` / `admin` via JWT `app_metadata` claims. Check with `is_moderator()` / `is_admin()` in RLS policies.
 - **Cryptographic receipts are system-level only.** `message_receipts` are invisible to all user-facing roles. They exist for tamper-evident moderation, not for display.
 
 ### Auth
 
-- **Magic link + OAuth (GitHub, GitLab).** No passwords. Supabase Auth handles everything.
+- **Magic link only.** No passwords, no OAuth providers. Supabase Auth handles everything.
 - **Pseudonyms auto-generated on signup** via `handle_new_user()` trigger. Format: `prefix_hexsuffix` (e.g. `worker_a7f3b2`).
 - **Roles assigned on signup.** Default role is `member`, set in `app_metadata`.
 
@@ -72,7 +72,7 @@ These must never be violated:
 4. **Sample size guards on salary data.** n < 30 = data hidden. This protects small-group privacy.
 5. **Messages are ephemeral.** 72-hour TTL enforced by pg_cron. Don't add features that persist message content beyond this window (receipts store hashes, not content).
 6. **Search path hardened.** Every new DB function must include `SET search_path = ''`.
-7. **HTTPS-only image URLs.** The `image_url` column enforces `https://` prefix at the DB level.
+7. **CDN-allowlisted image URLs.** The `image_url` column enforces both `https://` and an approved-domain CHECK constraint at the DB level. Permitted providers are `ALLOWED_IMAGE_PROVIDERS` in `src/lib/constants.ts`; the compiled regex `ALLOWED_IMAGE_HOSTNAME_RE` is used for client-side validation. Never widen this to bare `https://` — it enables tracking pixels and SSRF.
 
 ## Working With This Codebase
 

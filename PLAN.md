@@ -22,7 +22,7 @@ All six original MVP feature areas are built. Five of six implementation phases 
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Authentication | ✅ Complete | Magic link, GitHub OAuth, GitLab OAuth |
+| Authentication | ✅ Complete | Magic link only |
 | Live Chat Rooms | ✅ Complete | All 3 rooms, realtime, reactions, custom emotes, image attachments |
 | Onboarding Form | ✅ Complete | All fields, skip option, reusable in profile mode |
 | Stats Dashboard | ✅ Complete | SVG chart, distribution bars, sample size guards, baselines |
@@ -48,8 +48,6 @@ All six original MVP feature areas are built. Five of six implementation phases 
 
 ### 1. Authentication
 - **Magic link login** (email-based, no passwords)
-- **GitHub OAuth** (optional, for those who prefer)
-- **GitLab OAuth** (optional, for those who prefer)
 - **No passwords** — reduces friction and security burden
 - **MFA built-in** — Supabase handles this via email confirmation
 - **Pseudonymous accounts** — auto-generated pseudonyms like `worker_a7f3b2`
@@ -125,7 +123,7 @@ Three-tier system via JWT `app_metadata` claims:
 | Backend/DB | Supabase | Auth, Postgres, Realtime, Row Level Security |
 | Hosting (Frontend) | Cloudflare Pages | Free tier, easy deploys, deployed to handshakeunion.nexus |
 | Hosting (Backend) | Supabase Free Tier → Self-hosted | Start free, migrate when needed |
-| Auth | Supabase Auth | Magic links, OAuth, MFA built-in |
+| Auth | Supabase Auth | Magic links, MFA built-in |
 
 ---
 
@@ -217,7 +215,16 @@ handshake-union/
 │       ├── 020_fix_receipt_hash_separator.sql
 │       ├── 021_fix_verify_functions_hash.sql
 │       ├── 022_update_message_retention_6h.sql
-│       └── 023_update_message_retention_72h.sql
+│       ├── 023_update_message_retention_72h.sql
+│       ├── 024_image_url_domain_allowlist.sql
+│       ├── 025_custom_emotes_auth_only.sql
+│       ├── 026_country_check_constraint.sql
+│       ├── 027_message_rate_limit.sql
+│       └── 028_pseudonym_oracle_guard.sql
+├── public/
+│   ├── _headers                            # Cloudflare Pages security headers (CSP etc.)
+│   ├── handshake-union-logo.png
+│   └── handshake-union-logo-transparent.png
 ├── .env.example
 ├── .gitignore
 ├── AGENTS.md
@@ -247,7 +254,9 @@ handshake-union/
 015_enable_cron_cleanup → 016_public_member_stats → 017_messages_image_url →
 018_image_url_integrity → 019_fix_digest_search_path → 020_fix_receipt_hash_separator →
 021_fix_verify_functions_hash → 022_update_message_retention_6h →
-023_update_message_retention_72h
+023_update_message_retention_72h → 024_image_url_domain_allowlist →
+025_custom_emotes_auth_only → 026_country_check_constraint →
+027_message_rate_limit → 028_pseudonym_oracle_guard
 ```
 
 ### Tables
@@ -265,7 +274,7 @@ handshake-union/
 - employment_type: enum (nullable)
 - wfh_status: enum (nullable)
 - role_title: enum (nullable)
-- country: text (nullable)
+- country: text (nullable, CHECK: 'Australia' | 'New Zealand' | 'Other' — migration 026)
 - requires_visa: boolean (nullable)
 ```
 
@@ -274,10 +283,11 @@ handshake-union/
 - id: uuid
 - room: enum ('general', 'memes', 'whinge')
 - profile_id: uuid (FK to profiles)
-- content: text (max 2000 chars)
-- image_url: text (nullable, https:// only, max 2048 chars — added migration 017)
+- content: text (max 2000 chars, nullable — at least one of content/image_url required)
+- image_url: text (nullable, max 2048 chars — CDN allowlist CHECK constraint, migration 024)
 - created_at: timestamp
 - reply_to_id: uuid (nullable, FK to messages)
+- rate limit: max 10 inserts per 60 seconds per profile_id (BEFORE INSERT trigger, migration 027)
 ```
 
 **reactions**
@@ -431,9 +441,7 @@ Two scheduled crons (requires pg_cron extension — commented in migration, run 
 ```
 1. Land on home page
 2. Click "Join the Union"
-3. Choose auth method:
-   a. Enter email → receive magic link → click link → logged in
-   b. Click GitHub/GitLab → OAuth flow → logged in
+3. Enter email → receive magic link → click link → logged in
 4. Auto-assigned pseudonym (e.g., worker_a7f3b2)
 5. Redirected to onboarding form
 6. Fill in work details (optional but encouraged)
@@ -443,8 +451,8 @@ Two scheduled crons (requires pg_cron extension — commented in migration, run 
 ### Flow 2: Returning User Login
 ```
 1. Click "Login"
-2. Enter email OR click OAuth button
-3. Verify via magic link / OAuth
+2. Enter email
+3. Verify via magic link
 4. Redirected to chat (or onboarding if not completed)
 ```
 
@@ -486,8 +494,6 @@ Two scheduled crons (requires pg_cron extension — commented in migration, run 
 ### Phase 2: Authentication ✅ COMPLETE
 - [x] Supabase client setup
 - [x] Magic link login
-- [x] GitHub OAuth
-- [x] GitLab OAuth
 - [x] Auth callback handling
 - [x] Protected routes
 - [x] Auto-pseudonym generation (via DB trigger, varied prefix pool)
@@ -576,20 +582,24 @@ Two scheduled crons (requires pg_cron extension — commented in migration, run 
 
 ## Security Considerations
 
-- **No passwords stored** — magic links and OAuth only
+- **No passwords, no OAuth** — magic links only. OAuth providers disabled; no real-identity metadata stored in Supabase.
 - **Pseudonymous by default** — real identity never exposed
 - **Row Level Security** — database-level access control
 - **Privacy lockdown** — profiles restricted to own-row reads; stats exposed only via aggregate functions (no individual data enumeration)
+- **Pseudonym oracle hardened** — `get_pseudonym()` only resolves users who have sent at least one message, preventing cold UUID enumeration (migration 028)
 - **Search path security** — all DB functions use `SET search_path = ''` to prevent injection
-- **Ephemeral messages** — 72 hour TTL reduces long-term risk
+- **Ephemeral messages** — 72-hour TTL; rate-limited to 10 messages/minute per user via BEFORE INSERT trigger (migration 027)
+- **Image URL domain allowlist** — `image_url` accepts only approved CDN providers (GIPHY, Tenor, Imgur) via a DB CHECK constraint and client-side regex. Providers controlled by `ALLOWED_IMAGE_PROVIDERS` in `src/lib/constants.ts` (migration 024)
+- **Country field validated** — CHECK constraint on `profiles` and `profile_snapshots` enforces allowed values at DB level (migration 026)
+- **Custom emotes authenticated-only** — `anon` role removed; all endpoints require authentication (migration 025)
 - **Cryptographic receipts** — SHA-256 hashes prove message existence without retaining readable content. Invisible to all user-facing roles (RLS deny-all). Enables screenshot verification.
 - **Moderation integrity** — reports machine-copy content from DB (never user-provided) and link to receipts for tamper-evident verification
 - **Role-based access** — three-tier system (member/moderator/admin) via JWT claims. Receipts admin-only. Moderation moderator+. Clean separation of concerns.
 - **Minimal data posture** — messages deleted after 72 hours, reports after 30 days, only receipt hashes persist (no readable content)
+- **Content Security Policy** — CSP, X-Frame-Options, Referrer-Policy, Permissions-Policy served via `public/_headers` (Cloudflare Pages)
 - **Profile history** — snapshots track changes for trend analysis without exposing individual records
 - **Open source** — code is auditable
 - **No analytics/tracking** — no third-party scripts
-- **HTTPS only** — enforced by hosting provider
 
 ---
 
@@ -650,6 +660,17 @@ AGPL-3.0 — Ensures the code remains open even if someone forks and runs their 
 ## Changelog
 
 > Tracks scope changes, feature additions, and meaningful deviations from the original plan over the life of the project. Migrations and bug fixes are listed separately in `supabase/migrations/`.
+
+### 2026-02-27 — Security hardening (OpSec audit)
+- **Removed:** GitHub and GitLab OAuth providers. Magic link is now the only sign-in method, eliminating real-identity metadata leakage via `raw_user_meta_data`.
+- **Added:** Image URL domain allowlist — `messages.image_url` now enforces an approved-CDN CHECK constraint (`(media[0-9]*|i|c).(giphy|tenor|imgur).<tld>`). Client-side validation uses `ALLOWED_IMAGE_PROVIDERS` / `ALLOWED_IMAGE_HOSTNAME_RE` from `src/lib/constants.ts` (migration 024).
+- **Added:** Custom emotes restricted to authenticated users — `anon` role grant revoked (migration 025).
+- **Added:** Country field CHECK constraint on `profiles` and `profile_snapshots` — enforces `'Australia' | 'New Zealand' | 'Other'` at DB level (migration 026).
+- **Added:** Server-side message rate limit — BEFORE INSERT trigger, max 10 messages per 60 seconds per user (migration 027).
+- **Hardened:** `get_pseudonym()` now only resolves users who have sent at least one message, breaking cold UUID enumeration (migration 028).
+- **Added:** `public/_headers` — CSP, X-Frame-Options, Referrer-Policy, Permissions-Policy served at the edge by Cloudflare Pages.
+- **Removed:** `console.log` calls from `ChatContext.tsx` that were leaking broadcast payloads (message content, room, user IDs) to the browser console.
+- **Affected:** `Login.tsx`, `Privacy.tsx`, `ChatContext.tsx`, `MessageInput.tsx`, `src/lib/constants.ts`, `public/_headers`, migrations 024–028, `PLAN.md`, `README.md`, `AGENTS.md`.
 
 ### 2026-02-27 — Cursor-based chat pagination
 - **Added:** `ChatContext` now fetches only the most recent 50 messages on room join (`PAGE_SIZE = 50`, `ORDER BY created_at DESC LIMIT PAGE_SIZE + 1`, reversed for display). The extra `+1` fetch is used to determine whether an older page exists without a separate count query.
@@ -717,7 +738,7 @@ AGPL-3.0 — Ensures the code remains open even if someone forks and runs their 
 - **Not in original plan as a separate phase.**
 
 ### 2026-02-18 — Phases 1–3: Foundation, auth, onboarding
-- **Completed:** Project setup, Supabase schema (migrations 001–005), React routing, terminal aesthetic theme, magic link + OAuth auth, onboarding form with all fields.
+- **Completed:** Project setup, Supabase schema (migrations 001–005), React routing, terminal aesthetic theme, magic link auth, onboarding form with all fields.
 - **In original plan.**
 
 ### 2026-02-14 — Project initialised

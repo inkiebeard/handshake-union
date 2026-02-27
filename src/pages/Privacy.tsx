@@ -137,19 +137,13 @@ export function Privacy() {
 
             <p className="comment">authentication</p>
             <p>
-              Three sign-in methods are offered. Each involves different data flows:
+              sign-in is via email magic link only — no passwords, no OAuth providers.
             </p>
             <br />
             <p><Arrow /> <strong>email magic link</strong> — your email address is sent to Supabase Auth, which stores it and uses it to send a one-time login link via a transactional email service. your email is associated with your account in Supabase's database.</p>
-            <p><Arrow /> <strong>github oauth</strong> — you are redirected to GitHub to authenticate. GitHub shares a subset of your GitHub profile (email address, GitHub username, avatar URL, provider user ID) with Supabase. this is subject to{' '}
-              <ExternalLink href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy policy</ExternalLink>.
-            </p>
-            <p><Arrow /> <strong>gitlab oauth</strong> — same as above, via{' '}
-              <ExternalLink href="https://about.gitlab.com/privacy/">GitLab</ExternalLink>.
-            </p>
             <br />
             <p>
-              in all cases, a pseudonym is auto-assigned and your real identity is never
+              a pseudonym is auto-assigned on signup and your real identity is never
               displayed to other users. auth session tokens (JWTs) are stored in your
               browser's local storage by Supabase's client library.
             </p>
