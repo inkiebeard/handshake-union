@@ -22,7 +22,7 @@ export function Home() {
 
             <hr className="term-divider" />
 
-            <p className="prompt">Anonymous community for developers</p>
+            <p className="prompt">Anonymous community for developers & tech workers</p>
             <p className="comment">share workplace intel. build collective power.</p>
 
             <br />
@@ -31,6 +31,16 @@ export function Home() {
             <p>devs are being squeezed. AI hype weaponised against workers.</p>
             <p>corporate individualism keeps us isolated.</p>
             <p>this is a place to talk. humans verifying humans.</p>
+
+            <br />
+
+            <p className="comment">isn't this site built with the use of AI?</p>
+            <p>Yes.</p>
+            <p>While concerns around AI use are valid, we need to face AI's challenges head-on.</p>
+            <p>Ignoring AI's usefulness invites harm and will leave us all at a disadvantage.</p>
+            <p>The project's goal is to use AI to strengthen community efforts.</p>
+            <p>To use AI to serve people, not profit.</p>
+            <p>Let's use & build tools to empower, not exploit & replace.</p>
 
             <br />
 
