@@ -37,8 +37,12 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
   const [loadOlderError, setLoadOlderError] = useState<string | null>(null);
   const [currentRoom, setCurrentRoom] = useState<ChatRoom | null>(null);
 
-  // Ref to the created_at of the oldest loaded message — used as cursor for pagination
-  const oldestCreatedAtRef = useRef<string | undefined>(undefined);
+  // Composite cursor for pagination: both created_at and id of the oldest loaded message.
+  // Using only created_at is unsafe — multiple rows can share the same timestamp (bursty
+  // traffic, batch inserts), so a single-column .lt cursor silently skips those rows.
+  // (created_at < T) OR (created_at = T AND id < cursor_id) with ORDER BY created_at DESC,
+  // id DESC gives a fully-stable, gap-free page boundary regardless of timestamp collisions.
+  const oldestCursorRef = useRef<{ created_at: string; id: string } | undefined>(undefined);
 
   // Mirrors currentRoom state synchronously so loadOlderMessages can detect stale responses
   // after an async fetch without closing over a potentially-stale state value.
@@ -90,11 +94,14 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
     setHasMoreMessages(false);
 
     // Fetch one extra row — if we get PAGE_SIZE + 1 back, there are older messages waiting.
+    // Secondary sort on id gives a stable, deterministic order when multiple messages share
+    // the same created_at timestamp, which is required for the composite cursor to work.
     const { data, error: fetchError } = await supabase
       .from('messages')
       .select('*')
       .eq('room', room)
       .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .limit(PAGE_SIZE + 1);
 
     if (fetchError) {
@@ -108,7 +115,8 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
     const withPseudonyms = await attachPseudonyms(page);
 
     setMessages(withPseudonyms);
-    oldestCreatedAtRef.current = withPseudonyms[0]?.created_at;
+    const oldest = withPseudonyms[0];
+    oldestCursorRef.current = oldest ? { created_at: oldest.created_at, id: oldest.id } : undefined;
     setHasMoreMessages(hasMore);
     setLoading(false);
   }, [attachPseudonyms]);
@@ -119,20 +127,24 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
     // dep array — prevents unnecessary recreation on every loadingOlder state toggle.
     const room = activeRoomRef.current;
     if (!room || loadingOlderRef.current) return;
-    const cursor = oldestCreatedAtRef.current;
+    const cursor = oldestCursorRef.current;
     if (!cursor) return;
 
     loadingOlderRef.current = true;
     setLoadingOlder(true);
     setLoadOlderError(null);
 
-    // Fetch one extra row to know if an older page exists beyond this one.
+    // Composite cursor: (created_at < T) OR (created_at = T AND id < cursor_id).
+    // This is safe even when multiple messages share the same timestamp — a plain
+    // .lt('created_at', T) would permanently skip any same-timestamp rows that fell
+    // past the page boundary.  Secondary id sort must match the ORDER BY below.
     const { data, error: fetchError } = await supabase
       .from('messages')
       .select('*')
       .eq('room', room)
-      .lt('created_at', cursor)
+      .or(`created_at.lt.${cursor.created_at},and(created_at.eq.${cursor.created_at},id.lt.${cursor.id})`)
       .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .limit(PAGE_SIZE + 1);
 
     if (fetchError) {
@@ -178,7 +190,8 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
 
     setMessages((prev) => [...withPseudonyms, ...prev]);
     if (withPseudonyms.length > 0) {
-      oldestCreatedAtRef.current = withPseudonyms[0].created_at;
+      const oldest = withPseudonyms[0];
+      oldestCursorRef.current = { created_at: oldest.created_at, id: oldest.id };
     }
     setHasMoreMessages(hasMore);
     loadingOlderRef.current = false;
@@ -215,7 +228,7 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
     setReactions([]);
     setHasMoreMessages(false);
     setLoadOlderError(null);
-    oldestCreatedAtRef.current = undefined;
+    oldestCursorRef.current = undefined;
   }, []);
 
   // Join a chat room (subscribe to realtime via broadcast)
@@ -315,14 +328,15 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
   }, [messages, fetchReactions]);
 
   // Prune expired messages every minute (72-hour TTL matches server-side retention).
-  // Also keeps oldestCreatedAtRef aligned with the actual oldest in-memory message so
+  // Also keeps oldestCursorRef aligned with the actual oldest in-memory message so
   // the pagination cursor doesn't point to a row that no longer exists in the client state.
   useEffect(() => {
     const interval = setInterval(() => {
       const seventyTwoHoursAgo = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
       setMessages((prev) => {
         const remaining = prev.filter((m) => m.created_at >= seventyTwoHoursAgo);
-        oldestCreatedAtRef.current = remaining[0]?.created_at;
+        const oldest = remaining[0];
+        oldestCursorRef.current = oldest ? { created_at: oldest.created_at, id: oldest.id } : undefined;
         return remaining;
       });
     }, 60_000);
