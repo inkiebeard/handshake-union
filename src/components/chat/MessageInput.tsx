@@ -15,7 +15,11 @@ function isValidImageUrl(url: string): boolean {
   if (url.length > 2048) return false;
   try {
     const parsed = new URL(url);
-    return parsed.protocol === 'https:' && ALLOWED_IMAGE_HOSTNAME_RE.test(parsed.hostname);
+    return (
+      parsed.protocol === 'https:' &&
+      ALLOWED_IMAGE_HOSTNAME_RE.test(parsed.hostname) &&
+      parsed.pathname.length > 1  // DB regex requires a path after the TLD
+    );
   } catch {
     return false;
   }

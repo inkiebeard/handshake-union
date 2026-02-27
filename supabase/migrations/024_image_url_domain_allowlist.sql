@@ -1,18 +1,18 @@
 -- ============================================
--- Image URL allowlist: simplified regex
+-- Image URL allowlist: CDN domain constraint
 -- ============================================
--- Replaces the per-provider patterns from migrations 024/029/030 with a
--- single structured regex that mirrors ALLOWED_IMAGE_PROVIDERS in
+-- Replaces the open https:// CHECK added in migration 017 with a structured
+-- CDN-allowlist regex that mirrors ALLOWED_IMAGE_PROVIDERS in
 -- src/lib/constants.ts.
 --
--- Pattern: ^https://(media[0-9]*|i|c)\.(giphy|tenor|imgur)\.[a-z]{2,}/
---   prefix  — media, media<N>, i, or c
---   domain  — one of the approved second-level domains
---   tld     — any TLD (2+ letters: .com, .co, .io, .net, …)
+-- Pattern: ^https://(media[0-9]*|i|c)\.(giphy|tenor|imgur)\.com/
+--   prefix  — media, media<N> (CDN shards), i, or c
+--   domain  — approved second-level domain
+--   tld     — pinned to .com (all three providers exclusively use .com CDN)
 --
--- To add a new provider: add the SLD to ALLOWED_IMAGE_PROVIDERS in
--- src/lib/constants.ts, then create a new migration that drops this
--- constraint and adds it back with the updated domain group.
+-- TLD is pinned to .com to prevent lookalike-domain bypasses (e.g. giphy.xyz).
+-- To add a provider: extend the domain group AND update ALLOWED_IMAGE_PROVIDERS
+-- in src/lib/constants.ts. A new migration is required for each change.
 -- ============================================
 
 ALTER TABLE public.messages
@@ -22,6 +22,6 @@ ALTER TABLE public.messages
   ADD CONSTRAINT messages_image_url_check CHECK (
     image_url IS NULL OR (
       char_length(image_url) <= 2048
-      AND image_url ~* '^https://(media[0-9]*|i|c)\.(giphy|tenor|imgur)\.[a-z]{2,}/'
+      AND image_url ~* '^https://(media[0-9]*|i|c)\.(giphy|tenor|imgur)\.com/'
     )
   );

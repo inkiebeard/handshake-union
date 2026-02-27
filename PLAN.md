@@ -217,10 +217,9 @@ handshake-union/
 │       ├── 022_update_message_retention_6h.sql
 │       ├── 023_update_message_retention_72h.sql
 │       ├── 024_image_url_domain_allowlist.sql
-│       ├── 025_custom_emotes_auth_only.sql
-│       ├── 026_country_check_constraint.sql
-│       ├── 027_message_rate_limit.sql
-│       └── 028_pseudonym_oracle_guard.sql
+│       ├── 025_access_control_hardening.sql
+│       ├── 026_message_rate_limit.sql
+│       └── 027_pseudonym_oracle_guard.sql
 ├── public/
 │   ├── _headers                            # Cloudflare Pages security headers (CSP etc.)
 │   ├── handshake-union-logo.png
@@ -255,8 +254,8 @@ handshake-union/
 018_image_url_integrity → 019_fix_digest_search_path → 020_fix_receipt_hash_separator →
 021_fix_verify_functions_hash → 022_update_message_retention_6h →
 023_update_message_retention_72h → 024_image_url_domain_allowlist →
-025_custom_emotes_auth_only → 026_country_check_constraint →
-027_message_rate_limit → 028_pseudonym_oracle_guard
+025_access_control_hardening → 026_message_rate_limit →
+027_pseudonym_oracle_guard
 ```
 
 ### Tables

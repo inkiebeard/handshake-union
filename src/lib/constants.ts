@@ -82,7 +82,7 @@ export const COUNTRY_OPTIONS = ['Australia', 'New Zealand', 'Other'] as const;
 export const ALLOWED_IMAGE_PROVIDERS = ['giphy', 'tenor', 'imgur'] as const;
 
 export const ALLOWED_IMAGE_HOSTNAME_RE = new RegExp(
-  `^(media\\d*|i|c)\\.(${ALLOWED_IMAGE_PROVIDERS.join('|')})\\.[a-z]{2,}$`,
+  `^(media\\d*|i|c)\\.(${ALLOWED_IMAGE_PROVIDERS.join('|')})\\.com$`,
   'i'
 );
 

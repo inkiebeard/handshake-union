@@ -43,7 +43,8 @@ This is an anonymous developer solidarity platform. Every decision should reinfo
 - **Supabase is the entire backend.** No custom API server. Auth, Postgres, Realtime, and RLS handle everything.
 - **Row Level Security enforces access control.** Profiles are own-row-only reads. Messages are authenticated-read, own-write. Receipts deny ALL for authenticated users. Never bypass RLS from the frontend.
 - **Aggregate functions for stats.** Individual profile data is never exposed. All stats go through `get_salary_distribution()`, `get_role_distribution()`, etc.
-- **Migrations are sequential and numbered.** `supabase/migrations/001_*.sql` through `031_*.sql`. New migrations continue the sequence.
+- **Migrations are sequential and numbered.** `supabase/migrations/001_*.sql` through `027_*.sql`. New migrations continue the sequence.
+- **Consolidate migrations by feature, not by change.** Group all related schema changes (constraints, policies, triggers, indexes, grants) for a single feature into one migration file. Do not create a new migration file for each incremental fix or follow-up to an unrun migration — amend the existing file instead. Only create a separate migration when: (a) the user explicitly requests it, (b) migrations have already been run against a live/staging database, or (c) the user provides explicit context that separate files are needed.
 - **All DB functions use `SET search_path = ''`.** This is a security requirement — prevents search path injection.
 - **Three-tier RBAC.** `member` (default) / `moderator` / `admin` via JWT `app_metadata` claims. Check with `is_moderator()` / `is_admin()` in RLS policies.
 - **Cryptographic receipts are system-level only.** `message_receipts` are invisible to all user-facing roles. They exist for tamper-evident moderation, not for display.
@@ -77,7 +78,7 @@ These must never be violated:
 ## Working With This Codebase
 
 - **`PLAN.md`** is the source of truth for features, schema, and implementation status. Read it before making significant changes.
-- **Migrations are append-only.** Never edit an existing migration. Create a new one.
+- **Migrations are append-only once run.** Never edit a migration that has been applied to any database. If a migration has not yet been run (e.g. it exists only on the current branch and no confirmation of execution has been given), prefer editing it in place over creating an additional file to fix or extend it. When in doubt, ask the user whether migrations have been run before creating new files.
 - **The dev server runs on Vite.** `npm run dev` after `nvm use`.
 - **Deploy via Cloudflare Pages.** `wrangler.toml` is configured. `npm run build` produces the static output.
 - **Environment variables** are in `.env.local` (not committed). See `.env.example` for the shape.

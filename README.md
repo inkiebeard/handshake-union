@@ -138,10 +138,9 @@ supabase/migrations/
   022_update_message_retention_6h.sql
   023_update_message_retention_72h.sql
   024_image_url_domain_allowlist.sql
-  025_custom_emotes_auth_only.sql
-  026_country_check_constraint.sql
-  027_message_rate_limit.sql
-  028_pseudonym_oracle_guard.sql
+  025_access_control_hardening.sql
+  026_message_rate_limit.sql
+  027_pseudonym_oracle_guard.sql
 ```
 
 For message cleanup (72-hour TTL), you'll need to activate `pg_cron` in your Supabase project (Database → Extensions → pg_cron) and run the cron setup from migration 015, then apply migrations 022 and 023 to set the correct retention interval.
