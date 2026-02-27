@@ -19,6 +19,16 @@ Handshake Union is a refuge. A place to compare notes, vent, and to go back to t
 
 ---
 
+## On AI
+
+> *isn't this site built with the use of AI?*
+
+Yes.
+
+While concerns around AI use are valid, we need to face AI's challenges head-on. Ignoring AI's usefulness invites harm and will leave us all at a disadvantage. The project's goal is to use AI to strengthen community efforts. To use AI to serve people, not profit. Let's use & build tools to empower, not exploit & replace.
+
+---
+
 ## What it does
 
 - **Anonymous chat** — three rooms (`#general`, `#memes`, `#whinge`) with 72-hour ephemeral messages. Loads the most recent 50 messages on join; scroll to the top to page back through history. Supports image attachments (blur-by-default), emoji reactions, custom emotes, and reply threading. No logs, just anonymous cryptographic receipts of message integrity. Receipts help to prove or disprove a message existed (or didn't) without retaining it. Receipts are also used to report messages that violate the code of conduct.
