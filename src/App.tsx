@@ -13,6 +13,8 @@ import { Profile } from './pages/Profile';
 import { Stats } from './pages/Stats';
 import { Members } from './pages/Members';
 import { Privacy } from './pages/Privacy';
+import { NotFound } from './pages/NotFound';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 function AppRoutes() {
   const { user } = useAuth();
@@ -65,6 +67,7 @@ function AppRoutes() {
               </ProtectedRoute>
             }
           />
+          <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
     </ChatProvider>
@@ -73,10 +76,12 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <EmoteProvider>
-        <AppRoutes />
-      </EmoteProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <EmoteProvider>
+          <AppRoutes />
+        </EmoteProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }
