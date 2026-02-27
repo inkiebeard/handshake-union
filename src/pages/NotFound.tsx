@@ -30,15 +30,20 @@ export function NotFound() {
   const [glitching, setGlitching] = useState(false);
 
   useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
     const ids: ReturnType<typeof setTimeout>[] = [];
+    let cancelled = false;
 
     const tick = () => {
       const id = setTimeout(() => {
+        if (cancelled) return;
         if (Math.random() < 0.5) {
           setGlitching(true);
           setArtText(corruptText(BASE_ART));
 
           const recoverId = setTimeout(() => {
+            if (cancelled) return;
             setGlitching(false);
             setArtText(BASE_ART);
             tick();
@@ -52,7 +57,10 @@ export function NotFound() {
     };
 
     tick();
-    return () => ids.forEach(clearTimeout);
+    return () => {
+      cancelled = true;
+      ids.forEach(clearTimeout);
+    };
   }, []);
 
   return (

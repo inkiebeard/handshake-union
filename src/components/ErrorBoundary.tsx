@@ -29,7 +29,6 @@ function corruptLine(line: string, intensity: number): string {
       if (Math.random() < intensity * 0.45) {
         return GLITCH_CHARS[Math.floor(Math.random() * GLITCH_CHARS.length)];
       }
-      // occasional case flip on letters
       if (Math.random() < intensity * 0.2 && /[a-zA-Z]/.test(char)) {
         return char === char.toUpperCase() ? char.toLowerCase() : char.toUpperCase();
       }
@@ -38,15 +37,27 @@ function corruptLine(line: string, intensity: number): string {
     .join('');
 }
 
-function ErrorDisplay({ error }: { error: Error | null }) {
+interface DisplayProps {
+  error: Error | null;
+  onReset: () => void;
+}
+
+function ErrorDisplay({ error, onReset }: DisplayProps) {
   const [wave, setWave] = useState(0);
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   useEffect(() => {
+    if (reducedMotion) return;
     const id = setInterval(() => {
       setWave((w) => (w + 0.18) % ART_LINES.length);
     }, 55);
     return () => clearInterval(id);
-  }, []);
+  }, [reducedMotion]);
+
+  const handleBack = () => {
+    onReset();
+    window.history.back();
+  };
 
   return (
     <section className="section">
@@ -54,7 +65,7 @@ function ErrorDisplay({ error }: { error: Error | null }) {
         <pre className="ascii-art error-art">
           {ART_LINES.map((line, i) => {
             const dist = Math.abs(i - wave);
-            const closeness = Math.max(0, 1 - dist / 2.5);
+            const closeness = reducedMotion ? 0 : Math.max(0, 1 - dist / 2.5);
             const isActive = closeness > 0.05;
             const displayLine = isActive ? corruptLine(line, closeness) : line;
             const shift = isActive ? (Math.random() - 0.5) * closeness * 5 : 0;
@@ -77,14 +88,20 @@ function ErrorDisplay({ error }: { error: Error | null }) {
         <hr className="term-divider not-found-divider" />
 
         <p className="comment">something went wrong</p>
-        {error && <p className="error-art-message">{error.message}</p>}
+        {import.meta.env.DEV && error && (
+          <p className="error-art-message">{error.message}</p>
+        )}
         <div style={{ display: 'flex', gap: '1.5rem', marginTop: '0.75rem', justifyContent: 'center' }}>
           {window.history.length > 1 && (
-            <button onClick={() => window.history.back()} className="not-found-back-btn">
+            <button onClick={handleBack} className="not-found-back-btn">
               ← go back
             </button>
           )}
-          <button onClick={() => window.location.reload()} className="not-found-back-btn" style={{ color: 'var(--text-muted)' }}>
+          <button
+            onClick={() => window.location.reload()}
+            className="not-found-back-btn"
+            style={{ color: 'var(--text-muted)' }}
+          >
             ↺ reload
           </button>
         </div>
@@ -102,6 +119,8 @@ interface State {
   error: Error | null;
 }
 
+// React error boundaries require a class component — getDerivedStateFromError
+// and componentDidCatch have no functional equivalent in React core.
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
@@ -112,9 +131,17 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error };
   }
 
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('[ErrorBoundary]', error, info.componentStack);
+  }
+
+  resetBoundary = () => {
+    this.setState({ hasError: false, error: null });
+  };
+
   render() {
     if (this.state.hasError) {
-      return <ErrorDisplay error={this.state.error} />;
+      return <ErrorDisplay error={this.state.error} onReset={this.resetBoundary} />;
     }
     return this.props.children;
   }
