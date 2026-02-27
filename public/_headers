@@ -1,9 +1,8 @@
+# Security headers — applied to all routes by Cloudflare Pages / Workers Assets.
+# To add a new external service: extend connect-src (API calls) or img-src (images).
+# Do not re-enable unsafe-eval or unsafe-inline in script-src.
+# See: https://developers.cloudflare.com/pages/configuration/headers/
 /*
-  # Strict CSP — defence-in-depth on top of DB/client-side domain allowlists.
-  # Evaluated by Cloudflare Pages at the edge; not used in local Vite dev.
-  #
-  # If you add a new external service that needs connect-src or img-src access,
-  # extend the relevant directive here.
   Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src https: data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.giphy.com; font-src 'self' data:; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
