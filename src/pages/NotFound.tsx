@@ -73,12 +73,13 @@ export function NotFound() {
         <hr className="term-divider not-found-divider" />
 
         <p className="comment">path not found</p>
-        <p style={{ marginTop: '0.75rem' }}>
-          <button onClick={() => navigate(-1)} className="not-found-back-btn">
-            ← return to previous page
-          </button>
-        </p>
-        
+        {window.history.length > 1 && (
+          <p style={{ marginTop: '0.75rem' }}>
+            <button onClick={() => navigate(-1)} className="not-found-back-btn">
+              ← return to previous page
+            </button>
+          </p>
+        )}
         <p style={{ marginTop: '0.75rem' }}>
           <Link to="/" style={{ color: 'var(--accent)' }}>
             ← return home
