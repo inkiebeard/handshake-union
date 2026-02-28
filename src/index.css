@@ -118,6 +118,73 @@ strong {
   white-space: pre;
 }
 
+/* ---- Error boundary ---- */
+.error-art {
+  font-size: 0.85rem;
+  color: var(--danger);
+  overflow: hidden;
+}
+
+.error-art-line--hot {
+  color: var(--text-emphasis);
+  text-shadow: 0 0 6px var(--danger);
+}
+
+.error-art-message {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-family: inherit;
+  margin-top: 0.5rem;
+}
+
+/* ---- 404 page ---- */
+.not-found-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  text-align: center;
+}
+
+.not-found-art {
+  font-size: 2.5rem;
+  overflow-x: visible;
+  transition: none;
+}
+
+.not-found-art--glitch {
+  will-change: transform, filter;
+  transform: translateX(-3px) skewX(-1.5deg);
+  filter: hue-rotate(25deg) brightness(1.5) saturate(1.4);
+  text-shadow: 3px 0 var(--danger), -3px 0 var(--link);
+}
+
+.not-found-divider {
+  width: 100%;
+  max-width: 320px;
+}
+
+.not-found-back-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--accent);
+  font: inherit;
+}
+
+.not-found-back-btn:hover {
+  color: var(--text-emphasis);
+  text-decoration: underline;
+}
+
+.not-found-back-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
 /* ---- Terminal prompt style ---- */
 .prompt::before {
   content: '$ ';
