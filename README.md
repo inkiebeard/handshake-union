@@ -159,7 +159,7 @@ npm run dev
 ## Security model
 
 - **No passwords, no OAuth** — magic links only. OAuth providers are disabled; no real-identity metadata is ever sent to Supabase.
-- **Bot protection at login only** — [Cloudflare Turnstile](https://www.cloudflare.com/en-au/application-services/products/turnstile/) is used exclusively on the login page (`/login`) to prevent automated account creation. It is not loaded on any other page. The challenge token is verified server-side by Supabase; no personal data beyond browser signals is sent to Cloudflare.
+- **Bot protection at login only** — [Cloudflare Turnstile](https://www.cloudflare.com/en-au/application-services/products/turnstile/) is used exclusively on the login page (`/login`) to prevent automated account creation. It is not loaded on any other page. The challenge token is verified server-side by Supabase; during the challenge Cloudflare receives your IP address, user-agent, and related browser signals as described in the Privacy section; no other account or application data is shared.
 - **Pseudonymous by default** — real identity is never stored or exposed
 - **Row Level Security** — all data access enforced at the database level
 - **Profiles are private** — users can only read their own profile row; stats are exposed via aggregate functions only
