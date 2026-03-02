@@ -1,7 +1,11 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Navigate } from 'react-router-dom';
+import { Turnstile } from '@marsidev/react-turnstile';
+import type { TurnstileInstance } from '@marsidev/react-turnstile';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
+
+const TURNSTILE_SITE_KEY: string | undefined = import.meta.env.VITE_TURNSTILE_SITE_KEY;
 
 export function Login() {
   const { user, loading } = useAuth();
@@ -9,6 +13,8 @@ export function Login() {
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileInstance>(null);
 
   if (loading) {
     return (
@@ -24,8 +30,30 @@ export function Login() {
     return <Navigate to="/chat" replace />;
   }
 
+  if (!TURNSTILE_SITE_KEY) {
+    return (
+      <section className="section">
+        <div className="container">
+          <div className="columns is-centered">
+            <div className="column is-5">
+              <p className="prompt">configuration error</p>
+              <div className="notification is-danger">
+                <span style={{ color: 'var(--danger)' }}>error:</span>{' '}
+                VITE_TURNSTILE_SITE_KEY is not set. Copy .env.example to .env.local and add your Cloudflare Turnstile site key.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   const handleMagicLink = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!captchaToken) {
+      setError('please complete the human verification before continuing.');
+      return;
+    }
     setError(null);
     setIsLoading(true);
 
@@ -33,11 +61,14 @@ export function Login() {
       email,
       options: {
         emailRedirectTo: `${window.location.origin}/auth/callback`,
+        captchaToken,
       },
     });
 
     setIsLoading(false);
     if (authError) {
+      setCaptchaToken(null);
+      turnstileRef.current?.reset();
       setError(authError.message);
     } else {
       setSubmitted(true);
@@ -94,11 +125,22 @@ export function Login() {
               </div>
 
               <div className="field">
+                <Turnstile
+                  ref={turnstileRef}
+                  siteKey={TURNSTILE_SITE_KEY}
+                  onSuccess={(token) => { setCaptchaToken(token); setError(null); }}
+                  onError={() => { setCaptchaToken(null); setError('human verification failed to load — check any ad or privacy blockers, then reload the page.'); }}
+                  onExpire={() => { setCaptchaToken(null); setError('human verification expired — please complete it again to continue.'); }}
+                  options={{ theme: 'dark' }}
+                />
+              </div>
+
+              <div className="field">
                 <div className="control">
                   <button
                     className={`button is-primary is-fullwidth ${isLoading ? 'is-loading' : ''}`}
                     type="submit"
-                    disabled={isLoading}
+                    disabled={isLoading || !captchaToken}
                   >
                     send magic link
                   </button>

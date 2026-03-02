@@ -106,7 +106,10 @@ cp .env.example .env.local
 ```env
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY=your-publishable-key-here
+VITE_TURNSTILE_SITE_KEY=your-cloudflare-turnstile-site-key-here
 ```
+
+For local development, use Cloudflare's always-pass test site key (`1x00000000000000000000AA`) and the corresponding test secret key (`1x0000000000000000000000000000000AA`) in your Supabase Auth → Bot and Abuse Protection settings. You'll also need to enable Turnstile in Supabase under **Authentication → Sign In / Sign Up → Bot and Abuse Protection** and enter your real secret key for production.
 
 ### Database
 
@@ -156,6 +159,7 @@ npm run dev
 ## Security model
 
 - **No passwords, no OAuth** — magic links only. OAuth providers are disabled; no real-identity metadata is ever sent to Supabase.
+- **Bot protection at login only** — [Cloudflare Turnstile](https://www.cloudflare.com/en-au/application-services/products/turnstile/) is used exclusively on the login page (`/login`) to prevent automated account creation. It is not loaded on any other page. The challenge token is verified server-side by Supabase; during the challenge Cloudflare receives your IP address, user-agent, and related browser signals as described in the Privacy section; no other account or application data is shared.
 - **Pseudonymous by default** — real identity is never stored or exposed
 - **Row Level Security** — all data access enforced at the database level
 - **Profiles are private** — users can only read their own profile row; stats are exposed via aggregate functions only

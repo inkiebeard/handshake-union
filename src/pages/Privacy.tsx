@@ -21,7 +21,7 @@ export function Privacy() {
           <div className="column is-8">
 
             <p className="prompt">privacy &amp; third-party services</p>
-            <p className="comment">last updated: 2026-02-20</p>
+            <p className="comment">last updated: 2026-03-02</p>
 
             <hr className="term-divider" />
 
@@ -59,7 +59,6 @@ export function Privacy() {
             <p><Arrow /> Cloudflare Web Analytics (no analytics beacon injected into pages)</p>
             <p><Arrow /> Cloudflare Browser Insights (no performance monitoring beacon)</p>
             <p><Arrow /> Cloudflare Zaraz (no tag manager)</p>
-            <p><Arrow /> Cloudflare Turnstile or CAPTCHA</p>
             <br />
             <p>
               Cloudflare commits in its privacy policy not to sell personal data and not
@@ -71,6 +70,49 @@ export function Privacy() {
             <p>
               <ExternalLink href="https://www.cloudflare.com/privacypolicy/">
                 Cloudflare privacy policy →
+              </ExternalLink>
+            </p>
+
+            <hr className="term-divider" />
+
+            {/* ── CLOUDFLARE TURNSTILE ─────────────────────────────────────── */}
+            <p className="prompt">cloudflare turnstile</p>
+            <p>
+              The login page (<code>/login</code>) uses{' '}
+              <ExternalLink href="https://www.cloudflare.com/products/turnstile/">
+                Cloudflare Turnstile
+              </ExternalLink>{' '}
+              for bot protection. Turnstile replaces a traditional CAPTCHA — it runs
+              automated checks in the background to determine whether the visitor is human
+              before a magic link can be requested. <strong>It is only active on the login
+              page</strong> and is not loaded on any other page of this application.
+            </p>
+            <br />
+            <p className="comment">data turnstile collects during the challenge:</p>
+            <p><Arrow /> IP address — sent to Cloudflare's challenge infrastructure at <code>challenges.cloudflare.com</code></p>
+            <p><Arrow /> User-agent — browser and OS version string</p>
+            <p><Arrow /> Browser signals — passive signals (canvas, WebGL, fonts, timing) used to distinguish automated from human traffic; no persistent fingerprint is stored</p>
+            <p><Arrow /> Challenge interaction data — whether and how you interacted with the widget (invisible vs. interactive challenge)</p>
+            <br />
+            <p className="comment">what turnstile does NOT do:</p>
+            <p><Arrow /> It does not receive your email address or any other form data</p>
+            <p><Arrow /> It does not know your pseudonym or anything about your activity on this site beyond the challenge itself</p>
+            <p><Arrow /> It is not used for analytics, advertising, or cross-site tracking</p>
+            <p><Arrow /> It is not loaded on any page after you are logged in</p>
+            <br />
+            <p>
+              Turnstile issues a short-lived token that is passed to Supabase Auth alongside
+              your email. Supabase verifies the token server-side with Cloudflare. The token
+              is single-use and expires immediately after verification.
+            </p>
+            <br />
+            <p>
+              <ExternalLink href="https://www.cloudflare.com/privacypolicy/">
+                Cloudflare privacy policy →
+              </ExternalLink>
+              {' · '}
+              <ExternalLink href="https://developers.cloudflare.com/turnstile/">
+                Turnstile documentation →
               </ExternalLink>
             </p>
 
