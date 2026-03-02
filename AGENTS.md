@@ -54,6 +54,7 @@ This is an anonymous developer solidarity platform. Every decision should reinfo
 - **Magic link only.** No passwords, no OAuth providers. Supabase Auth handles everything.
 - **Pseudonyms auto-generated on signup** via `handle_new_user()` trigger. Format: `prefix_hexsuffix` (e.g. `worker_a7f3b2`).
 - **Roles assigned on signup.** Default role is `member`, set in `app_metadata`.
+- **Cloudflare Turnstile on login only.** `@marsidev/react-turnstile` renders the widget in `Login.tsx`. The resolved token is passed to `signInWithOtp` via `options.captchaToken`. Turnstile is **not** used on any other page or flow — not on onboarding, not in chat, not in profile. Do not add it elsewhere. Site key in `VITE_TURNSTILE_SITE_KEY`; secret key lives in Supabase Auth settings only (never in frontend code).
 
 ## Code Style
 
@@ -74,6 +75,7 @@ These must never be violated:
 5. **Messages are ephemeral.** 72-hour TTL enforced by pg_cron. Don't add features that persist message content beyond this window (receipts store hashes, not content).
 6. **Search path hardened.** Every new DB function must include `SET search_path = ''`.
 7. **CDN-allowlisted image URLs.** The `image_url` column enforces both `https://` and an approved-domain CHECK constraint at the DB level. Permitted providers are `ALLOWED_IMAGE_PROVIDERS` in `src/lib/constants.ts`; the compiled regex `ALLOWED_IMAGE_HOSTNAME_RE` is used for client-side validation. Never widen this to bare `https://` — it enables tracking pixels and SSRF.
+8. **Turnstile is login-only.** Cloudflare Turnstile is intentionally scoped to `Login.tsx` for bot protection at the authentication gate. Do not add it to any other page or user flow. The Turnstile secret key must never appear in frontend code — it lives exclusively in Supabase Auth settings.
 
 ## Working With This Codebase
 

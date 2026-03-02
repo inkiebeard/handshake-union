@@ -1,7 +1,18 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Navigate } from 'react-router-dom';
+import { Turnstile } from '@marsidev/react-turnstile';
+import type { TurnstileInstance } from '@marsidev/react-turnstile';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
+
+const TURNSTILE_SITE_KEY: string = import.meta.env.VITE_TURNSTILE_SITE_KEY;
+
+if (!TURNSTILE_SITE_KEY) {
+  throw new Error(
+    'Missing VITE_TURNSTILE_SITE_KEY environment variable. ' +
+    'Copy .env.example to .env.local and add your Cloudflare Turnstile site key.'
+  );
+}
 
 export function Login() {
   const { user, loading } = useAuth();
@@ -9,6 +20,8 @@ export function Login() {
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileInstance>(null);
 
   if (loading) {
     return (
@@ -26,6 +39,7 @@ export function Login() {
 
   const handleMagicLink = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!captchaToken) return;
     setError(null);
     setIsLoading(true);
 
@@ -33,11 +47,14 @@ export function Login() {
       email,
       options: {
         emailRedirectTo: `${window.location.origin}/auth/callback`,
+        captchaToken,
       },
     });
 
     setIsLoading(false);
     if (authError) {
+      setCaptchaToken(null);
+      turnstileRef.current?.reset();
       setError(authError.message);
     } else {
       setSubmitted(true);
@@ -94,11 +111,22 @@ export function Login() {
               </div>
 
               <div className="field">
+                <Turnstile
+                  ref={turnstileRef}
+                  siteKey={TURNSTILE_SITE_KEY}
+                  onSuccess={setCaptchaToken}
+                  onError={() => setCaptchaToken(null)}
+                  onExpire={() => setCaptchaToken(null)}
+                  options={{ theme: 'dark' }}
+                />
+              </div>
+
+              <div className="field">
                 <div className="control">
                   <button
                     className={`button is-primary is-fullwidth ${isLoading ? 'is-loading' : ''}`}
                     type="submit"
-                    disabled={isLoading}
+                    disabled={isLoading || !captchaToken}
                   >
                     send magic link
                   </button>

@@ -51,6 +51,7 @@ All six original MVP feature areas are built. Five of six implementation phases 
 - **No passwords** — reduces friction and security burden
 - **MFA built-in** — Supabase handles this via email confirmation
 - **Pseudonymous accounts** — auto-generated pseudonyms like `worker_a7f3b2`
+- **Bot protection** — Cloudflare Turnstile on the login page only; token verified server-side by Supabase before a magic link is issued
 
 ### 2. Live Chat Rooms
 Three rooms to start:
@@ -582,6 +583,7 @@ Two scheduled crons (requires pg_cron extension — commented in migration, run 
 ## Security Considerations
 
 - **No passwords, no OAuth** — magic links only. OAuth providers disabled; no real-identity metadata stored in Supabase.
+- **Bot protection at login only** — Cloudflare Turnstile on `/login` prevents automated account creation. Not loaded on any other page. Token verified server-side by Supabase before magic link is issued. `VITE_TURNSTILE_SITE_KEY` in env; secret key configured in Supabase Auth settings.
 - **Pseudonymous by default** — real identity never exposed
 - **Row Level Security** — database-level access control
 - **Privacy lockdown** — profiles restricted to own-row reads; stats exposed only via aggregate functions (no individual data enumeration)
@@ -659,6 +661,14 @@ AGPL-3.0 — Ensures the code remains open even if someone forks and runs their 
 ## Changelog
 
 > Tracks scope changes, feature additions, and meaningful deviations from the original plan over the life of the project. Migrations and bug fixes are listed separately in `supabase/migrations/`.
+
+### 2026-03-02 — Cloudflare Turnstile bot protection
+- **Added:** Cloudflare Turnstile CAPTCHA on the login page (`/login`) only. Prevents automated account creation and magic link flooding. Token is passed to `supabase.auth.signInWithOtp()` via `options.captchaToken` and verified server-side by Supabase against the Turnstile secret key.
+- **Added:** `VITE_TURNSTILE_SITE_KEY` environment variable. Secret key configured in Supabase Auth → Bot and Abuse Protection.
+- **Added:** `@marsidev/react-turnstile` dependency. Widget renders with dark theme between the email input and submit button. Submit is disabled until challenge resolves. On auth error the widget auto-resets so the user can retry.
+- **Updated:** `Privacy.tsx` — removed false "Cloudflare Turnstile not enabled" claim; added full Turnstile section documenting what data is collected (IP, browser signals, user-agent), its login-only scope, and links to Cloudflare's Turnstile privacy docs.
+- **Updated:** `README.md`, `PLAN.md`, `AGENTS.md` — security model, setup instructions, and invariants updated to reflect Turnstile use.
+- **Affected:** `Login.tsx`, `Privacy.tsx`, `.env.example`, `README.md`, `PLAN.md`, `AGENTS.md`, `package.json`.
 
 ### 2026-02-27 — Security hardening (OpSec audit)
 - **Removed:** GitHub and GitLab OAuth providers. Magic link is now the only sign-in method, eliminating real-identity metadata leakage via `raw_user_meta_data`.
