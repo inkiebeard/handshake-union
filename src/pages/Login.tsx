@@ -5,14 +5,7 @@ import type { TurnstileInstance } from '@marsidev/react-turnstile';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 
-const TURNSTILE_SITE_KEY: string = import.meta.env.VITE_TURNSTILE_SITE_KEY;
-
-if (!TURNSTILE_SITE_KEY) {
-  throw new Error(
-    'Missing VITE_TURNSTILE_SITE_KEY environment variable. ' +
-    'Copy .env.example to .env.local and add your Cloudflare Turnstile site key.'
-  );
-}
+const TURNSTILE_SITE_KEY: string | undefined = import.meta.env.VITE_TURNSTILE_SITE_KEY;
 
 export function Login() {
   const { user, loading } = useAuth();
@@ -37,9 +30,30 @@ export function Login() {
     return <Navigate to="/chat" replace />;
   }
 
+  if (!TURNSTILE_SITE_KEY) {
+    return (
+      <section className="section">
+        <div className="container">
+          <div className="columns is-centered">
+            <div className="column is-5">
+              <p className="prompt">configuration error</p>
+              <div className="notification is-danger">
+                <span style={{ color: 'var(--danger)' }}>error:</span>{' '}
+                VITE_TURNSTILE_SITE_KEY is not set. Copy .env.example to .env.local and add your Cloudflare Turnstile site key.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   const handleMagicLink = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!captchaToken) return;
+    if (!captchaToken) {
+      setError('please complete the human verification before continuing.');
+      return;
+    }
     setError(null);
     setIsLoading(true);
 
@@ -114,9 +128,9 @@ export function Login() {
                 <Turnstile
                   ref={turnstileRef}
                   siteKey={TURNSTILE_SITE_KEY}
-                  onSuccess={setCaptchaToken}
-                  onError={() => setCaptchaToken(null)}
-                  onExpire={() => setCaptchaToken(null)}
+                  onSuccess={(token) => { setCaptchaToken(token); setError(null); }}
+                  onError={() => { setCaptchaToken(null); setError('human verification failed to load — check any ad or privacy blockers, then reload the page.'); }}
+                  onExpire={() => { setCaptchaToken(null); setError('human verification expired — please complete it again to continue.'); }}
                   options={{ theme: 'dark' }}
                 />
               </div>
