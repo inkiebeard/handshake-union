@@ -318,7 +318,7 @@ export function GiphyPicker({ onSelect, onClose }: GiphyPickerProps) {
     {hoveredGif && previewStyle && (
       <div className="giphy-hover-preview" style={previewStyle}>
         <img
-          src={hoveredGif.gif.url}
+          src={hoveredGif.gif.previewUrl || hoveredGif.gif.url}
           alt={hoveredGif.gif.alt}
           referrerPolicy="no-referrer"
         />

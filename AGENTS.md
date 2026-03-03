@@ -51,7 +51,7 @@ This is an anonymous developer solidarity platform. Every decision should reinfo
 
 ### Auth
 
-- **Magic link only.** No passwords, no OAuth providers. Supabase Auth handles everything.
+- **Magic link only (production).** No passwords, no OAuth providers. Supabase Auth handles everything. The one exception is a dev-build-only anonymous sign-in path in `Login.tsx` gated behind `import.meta.env.DEV` — it is dead-code-eliminated from production bundles and must never be exposed in a production build.
 - **Pseudonyms auto-generated on signup** via `handle_new_user()` trigger. Format: `prefix_hexsuffix` (e.g. `worker_a7f3b2`).
 - **Roles assigned on signup.** Default role is `member`, set in `app_metadata`.
 - **Cloudflare Turnstile on login only.** `@marsidev/react-turnstile` renders the widget in `Login.tsx`. The resolved token is passed to `signInWithOtp` via `options.captchaToken`. Turnstile is **not** used on any other page or flow — not on onboarding, not in chat, not in profile. Do not add it elsewhere. Site key in `VITE_TURNSTILE_SITE_KEY`; secret key lives in Supabase Auth settings only (never in frontend code).

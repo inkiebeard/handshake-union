@@ -246,6 +246,7 @@ export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: Messa
                 alt="attachment preview"
                 className="chat-input-image-preview-img"
                 referrerPolicy="no-referrer"
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
               />
             </div>
           )}

@@ -51,7 +51,7 @@ export function Login() {
   }
 
   const needsEmail = !isValidEmail(email);
-  const needsCaptcha = !captchaToken;
+  const needsCaptcha = !!TURNSTILE_SITE_KEY && !captchaToken;
   const submitHint = !error && (needsEmail || needsCaptcha)
     ? needsEmail && needsCaptcha
       ? 'enter a valid email and complete the verification to continue'
