@@ -239,6 +239,28 @@ export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: Messa
               allowed: {ALLOWED_IMAGE_PROVIDERS.join(', ')} — e.g. https://media.tenor.com/…
             </span>
           )}
+          {hasImage && !imageUrlInvalid && (
+            <div className="chat-input-image-preview">
+              <img
+                src={imageUrlTrimmed}
+                alt="attachment preview"
+                className="chat-input-image-preview-img"
+                referrerPolicy="no-referrer"
+                onError={(event) => {
+                  const img = event.currentTarget;
+                  img.style.display = 'none';
+                  const container = img.parentElement;
+                  if (!container) return;
+                  if (container.querySelector('.chat-input-image-preview-error')) return;
+                  const errorSpan = document.createElement('span');
+                  errorSpan.className = 'chat-input-image-preview-error';
+                  errorSpan.textContent = 'Failed to load image preview';
+                  container.appendChild(errorSpan);
+                }}
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              />
+            </div>
+          )}
         </div>
       )}
 

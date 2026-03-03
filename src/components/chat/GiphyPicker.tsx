@@ -102,6 +102,11 @@ async function fetchGifs(searchQuery: string, offset: number, signal?: AbortSign
   };
 }
 
+interface HoveredGif {
+  gif: GiphyGif;
+  rect: DOMRect;
+}
+
 export function GiphyPicker({ onSelect, onClose }: GiphyPickerProps) {
   const [query, setQuery] = useState('');
   const [gifs, setGifs] = useState<GiphyGif[]>([]);
@@ -110,9 +115,14 @@ export function GiphyPicker({ onSelect, onClose }: GiphyPickerProps) {
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hoveredGif, setHoveredGif] = useState<HoveredGif | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const longPressedRef = useRef(false);
 
   const load = useCallback(async (q: string, nextOffset: number, append: boolean) => {
     abortControllerRef.current?.abort();
@@ -159,9 +169,21 @@ export function GiphyPicker({ onSelect, onClose }: GiphyPickerProps) {
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+      if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
       abortControllerRef.current?.abort();
     };
   }, []);
+
+  useEffect(() => {
+    if (!hoveredGif || window.matchMedia('(hover: hover)').matches) return;
+    const dismiss = () => {
+      if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+      setHoveredGif(null);
+    };
+    document.addEventListener('touchstart', dismiss, { once: true, passive: true });
+    return () => document.removeEventListener('touchstart', dismiss);
+  }, [hoveredGif]);
 
   const handleQueryChange = (value: string) => {
     setQuery(value);
@@ -169,7 +191,27 @@ export function GiphyPicker({ onSelect, onClose }: GiphyPickerProps) {
     debounceRef.current = setTimeout(() => load(value, 0, false), 400);
   };
 
+  const PREVIEW_W = 220;
+  const PREVIEW_H = 220;
+  const PREVIEW_PAD = 8;
+  const isHoverDevice = window.matchMedia('(hover: hover)').matches;
+  let previewStyle: React.CSSProperties | undefined;
+  if (hoveredGif) {
+    if (isHoverDevice) {
+      const { rect } = hoveredGif;
+      let left = rect.left - PREVIEW_W - PREVIEW_PAD;
+      if (left < PREVIEW_PAD) left = rect.right + PREVIEW_PAD;
+      left = Math.min(left, window.innerWidth - PREVIEW_W - PREVIEW_PAD);
+      let top = rect.top + rect.height / 2 - PREVIEW_H / 2;
+      top = Math.max(PREVIEW_PAD, Math.min(top, window.innerHeight - PREVIEW_H - PREVIEW_PAD));
+      previewStyle = { left, top };
+    } else {
+      previewStyle = { left: '50%', top: '50%', transform: 'translate(-50%, -50%)' };
+    }
+  }
+
   return (
+    <>
     <div className="giphy-picker">
       <div className="giphy-picker-header">
         <input
@@ -201,9 +243,48 @@ export function GiphyPicker({ onSelect, onClose }: GiphyPickerProps) {
                   type="button"
                   className="giphy-gif-btn"
                   onClick={() => {
+                    if (longPressedRef.current) { longPressedRef.current = false; return; }
                     fireGiphyAnalytics(gif.analytics.onclickUrl);
                     onSelect(gif.url, gif.analytics.onsentUrl);
                     onClose();
+                  }}
+                  onMouseEnter={(e) => {
+                    if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+                    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    previewTimerRef.current = setTimeout(() => setHoveredGif({ gif, rect }), 500);
+                  }}
+                  onMouseLeave={() => {
+                    if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+                    setHoveredGif(null);
+                  }}
+                  onTouchStart={(e) => {
+                    longPressedRef.current = false;
+                    if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+                    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+                    const touch = e.touches[0];
+                    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    previewTimerRef.current = setTimeout(() => {
+                      setHoveredGif({ gif, rect });
+                      longPressedRef.current = true;
+                    }, 600);
+                  }}
+                  onTouchMove={(e) => {
+                    if (!touchStartRef.current) return;
+                    const touch = e.touches[0];
+                    const dx = touch.clientX - touchStartRef.current.x;
+                    const dy = touch.clientY - touchStartRef.current.y;
+                    if (Math.hypot(dx, dy) > 10) {
+                      if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+                      setHoveredGif(null);
+                      touchStartRef.current = null;
+                    }
+                  }}
+                  onTouchEnd={() => {
+                    if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+                    touchStartRef.current = null;
+                    dismissTimerRef.current = setTimeout(() => setHoveredGif(null), 1500);
                   }}
                 >
                   <img
@@ -233,5 +314,16 @@ export function GiphyPicker({ onSelect, onClose }: GiphyPickerProps) {
         Powered By <strong>GIPHY</strong>
       </div>
     </div>
+
+    {hoveredGif && previewStyle && (
+      <div className="giphy-hover-preview" style={previewStyle}>
+        <img
+          src={hoveredGif.gif.previewUrl || hoveredGif.gif.url}
+          alt={hoveredGif.gif.alt}
+          referrerPolicy="no-referrer"
+        />
+      </div>
+    )}
+    </>
   );
 }
