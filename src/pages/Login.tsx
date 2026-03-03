@@ -50,6 +50,16 @@ export function Login() {
     );
   }
 
+  const needsEmail = !isValidEmail(email);
+  const needsCaptcha = !captchaToken;
+  const submitHint = !error && (needsEmail || needsCaptcha)
+    ? needsEmail && needsCaptcha
+      ? 'enter a valid email and complete the verification to continue'
+      : needsEmail
+        ? 'enter a valid email to continue'
+        : 'complete the verification above to continue'
+    : null;
+
   const handleMagicLink = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!captchaToken) {
@@ -137,24 +147,16 @@ export function Login() {
                 />
               </div>
 
-              {!error && (() => {
-                const needsEmail = !isValidEmail(email);
-                const needsCaptcha = !captchaToken;
-                if (!needsEmail && !needsCaptcha) return null;
-                const hint = needsEmail && needsCaptcha
-                  ? '# enter a valid email and complete the verification to continue'
-                  : needsEmail
-                    ? '# enter a valid email to continue'
-                    : '# complete the verification above to continue';
-                return <p className="comment" style={{ marginBottom: '0.75rem' }}>{hint}</p>;
-              })()}
+              {submitHint && (
+                <p className="comment" style={{ marginBottom: '0.75rem' }}>{submitHint}</p>
+              )}
 
               <div className="field">
                 <div className="control">
                   <button
                     className={`button is-primary is-fullwidth ${isLoading ? 'is-loading' : ''}`}
                     type="submit"
-                    disabled={isLoading || !captchaToken || !isValidEmail(email)}
+                    disabled={isLoading || needsEmail || needsCaptcha}
                   >
                     send magic link
                   </button>
