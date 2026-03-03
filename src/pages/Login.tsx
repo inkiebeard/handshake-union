@@ -7,6 +7,8 @@ import { supabase } from '../lib/supabase';
 
 const TURNSTILE_SITE_KEY: string | undefined = import.meta.env.VITE_TURNSTILE_SITE_KEY;
 
+const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
 export function Login() {
   const { user, loading } = useAuth();
   const [email, setEmail] = useState('');
@@ -135,12 +137,24 @@ export function Login() {
                 />
               </div>
 
+              {!error && (() => {
+                const needsEmail = !isValidEmail(email);
+                const needsCaptcha = !captchaToken;
+                if (!needsEmail && !needsCaptcha) return null;
+                const hint = needsEmail && needsCaptcha
+                  ? '# enter a valid email and complete the verification to continue'
+                  : needsEmail
+                    ? '# enter a valid email to continue'
+                    : '# complete the verification above to continue';
+                return <p className="comment" style={{ marginBottom: '0.75rem' }}>{hint}</p>;
+              })()}
+
               <div className="field">
                 <div className="control">
                   <button
                     className={`button is-primary is-fullwidth ${isLoading ? 'is-loading' : ''}`}
                     type="submit"
-                    disabled={isLoading || !captchaToken}
+                    disabled={isLoading || !captchaToken || !isValidEmail(email)}
                   >
                     send magic link
                   </button>

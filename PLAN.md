@@ -668,7 +668,7 @@ AGPL-3.0 — Ensures the code remains open even if someone forks and runs their 
 - **Added:** `@marsidev/react-turnstile` dependency. Widget renders with dark theme between the email input and submit button. Submit is disabled until challenge resolves. On auth error the widget auto-resets so the user can retry.
 - **Updated:** `Privacy.tsx` — removed false "Cloudflare Turnstile not enabled" claim; added full Turnstile section documenting what data is collected (IP, browser signals, user-agent), its login-only scope, and links to Cloudflare's Turnstile privacy docs.
 - **Updated:** `README.md`, `PLAN.md`, `AGENTS.md` — security model, setup instructions, and invariants updated to reflect Turnstile use.
-- **Affected:** `Login.tsx`, `Privacy.tsx`, `.env.example`, `README.md`, `PLAN.md`, `AGENTS.md`, `package.json`.
+- **Affected:** `Login.tsx`, `Privacy.tsx`, `.env.example`, `README.md`, `PLAN.md`, `AGENTS.md`, `package.json`, `public/_headers`.
 
 ### 2026-02-27 — Security hardening (OpSec audit)
 - **Removed:** GitHub and GitLab OAuth providers. Magic link is now the only sign-in method, eliminating real-identity metadata leakage via `raw_user_meta_data`.

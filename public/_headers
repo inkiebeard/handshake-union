@@ -1,9 +1,13 @@
 # Security headers — applied to all routes by Cloudflare Pages / Workers Assets.
 # To add a new external service: extend connect-src (API calls) or img-src (images).
 # Do not re-enable unsafe-eval or unsafe-inline in script-src.
+# Cloudflare Turnstile requires:
+#   script-src  https://challenges.cloudflare.com  (widget bootstrap script)
+#   frame-src   https://challenges.cloudflare.com  (challenge iframe)
+#   connect-src https://challenges.cloudflare.com  (token verification)
 # See: https://developers.cloudflare.com/pages/configuration/headers/
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src https: data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.giphy.com; font-src 'self' data:; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src https: data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.giphy.com https://challenges.cloudflare.com; font-src 'self' data:; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: no-referrer
