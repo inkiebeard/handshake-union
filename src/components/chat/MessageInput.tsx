@@ -239,6 +239,16 @@ export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: Messa
               allowed: {ALLOWED_IMAGE_PROVIDERS.join(', ')} — e.g. https://media.tenor.com/…
             </span>
           )}
+          {hasImage && !imageUrlInvalid && (
+            <div className="chat-input-image-preview">
+              <img
+                src={imageUrlTrimmed}
+                alt="attachment preview"
+                className="chat-input-image-preview-img"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+          )}
         </div>
       )}
 
