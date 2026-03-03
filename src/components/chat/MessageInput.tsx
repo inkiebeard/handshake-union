@@ -257,7 +257,6 @@ export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: Messa
                   errorSpan.textContent = 'Failed to load image preview';
                   container.appendChild(errorSpan);
                 }}
-                onError={(e) => { e.currentTarget.style.display = 'none'; }}
               />
             </div>
           )}
