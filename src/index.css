@@ -745,6 +745,26 @@ strong {
   font-weight: 400;
 }
 
+/* Multi-link error — shown in MessageInput when >1 https:// URL is detected */
+.chat-link-multi-warning {
+  padding: 0.4rem 0.7rem;
+  margin-bottom: 0.4rem;
+  border-left: 3px solid #f0a800;
+  background: rgba(240, 168, 0, 0.08);
+  color: #f0a800;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+/* Label shown in the auto-detected link bar (URL found in message text) */
+.chat-link-detected-label {
+  display: block;
+  margin-bottom: 0.4rem;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+}
+
 /* Fallback URL line */
 .chat-link-preview-url {
   color: var(--text-muted);

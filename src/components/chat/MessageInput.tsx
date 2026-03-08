@@ -62,19 +62,42 @@ export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: Messa
   const hasImage = imageUrlTrimmed.length > 0;
   const imageUrlInvalid = hasImage && !isValidImageUrl(imageUrlTrimmed);
 
+  // Manual link bar validation (only relevant when bar is open)
   const linkUrlTrimmed = linkUrl.trim();
-  const hasLink = linkUrlTrimmed.length > 0;
-  const linkUrlInvalid = hasLink && !isValidLinkUrl(linkUrlTrimmed);
+  const linkUrlInvalid = showLinkInput && linkUrlTrimmed.length > 0 && !isValidLinkUrl(linkUrlTrimmed);
 
+  // Auto-detect https:// URLs typed inline in the message text.
+  // Strip trailing punctuation so "https://example.com." and "https://example.com)" parse cleanly.
+  const contentUrlMatches = (content.match(/\bhttps:\/\/[^\s<>"']+/g) ?? [])
+    .map(u => u.replace(/[.,;:!?'")\]>]+$/, ''));
+
+  // Only count the manual link bar when it is open and has content
+  const manualLinkForDetection = showLinkInput ? linkUrlTrimmed : '';
+
+  // Deduplicate: if user typed the same URL they put in the link bar, count it once
+  const allLinks = [...new Set([
+    ...contentUrlMatches,
+    ...(manualLinkForDetection ? [manualLinkForDetection] : []),
+  ])];
+  const multiLinkError = allLinks.length > 1;
+
+  // Single effective link URL for sending + preview.
+  // Manual bar takes priority (user intentionally set it); text-detected is the fallback.
+  const effectiveRawUrl = multiLinkError
+    ? ''
+    : (manualLinkForDetection || contentUrlMatches[0] || '');
+  const hasLink = effectiveRawUrl.length > 0;
+
+  // Debounce the effective URL so the OG fetch only fires after typing pauses
   const [debouncedLinkUrl, setDebouncedLinkUrl] = useState('');
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedLinkUrl(linkUrlTrimmed), 500);
+    const timer = setTimeout(() => setDebouncedLinkUrl(effectiveRawUrl), 500);
     return () => clearTimeout(timer);
-  }, [linkUrlTrimmed]);
-  const showLinkPreview = debouncedLinkUrl.length > 0 && isValidLinkUrl(debouncedLinkUrl);
+  }, [effectiveRawUrl]);
+  const showLinkPreview = !multiLinkError && debouncedLinkUrl.length > 0 && isValidLinkUrl(debouncedLinkUrl);
 
   const hasContent = content.trim().length > 0;
-  const canSend = (hasContent || (hasImage && !imageUrlInvalid) || (hasLink && !linkUrlInvalid)) && !imageUrlInvalid && !linkUrlInvalid;
+  const canSend = (hasContent || (hasImage && !imageUrlInvalid) || hasLink) && !imageUrlInvalid && !linkUrlInvalid && !multiLinkError;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,7 +107,7 @@ export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: Messa
     setError(null);
 
     try {
-      await onSend(content, hasImage ? imageUrlTrimmed : null, replyTo?.id, hasLink ? linkUrlTrimmed : null);
+      await onSend(content, hasImage ? imageUrlTrimmed : null, replyTo?.id, hasLink ? effectiveRawUrl : null);
       // Fire onsent analytics after the message actually delivers
       if (gifOnsentUrl) {
         fireGiphyAnalytics(gifOnsentUrl);
@@ -241,7 +264,25 @@ export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: Messa
         />
       )}
 
-      {/* Link URL input */}
+      {/* Multiple-links error — shown whenever more than one https:// URL is detected
+          across message text and the manual link bar */}
+      {multiLinkError && (
+        <div className="chat-link-multi-warning">
+          &#9888;&#65039; Multiple links detected — only one link per message.
+          Post each link in a separate message.
+        </div>
+      )}
+
+      {/* Auto-detected link preview — a URL was found in the message text and no
+          manual link bar is open; preview is shown so the user knows it will render */}
+      {!showLinkInput && showLinkPreview && (
+        <div className="chat-image-url-bar">
+          <span className="chat-link-detected-label">&#128279; link detected in message</span>
+          <LinkPreview url={debouncedLinkUrl} />
+        </div>
+      )}
+
+      {/* Manual link URL input */}
       {showLinkInput && (
         <div className="chat-image-url-bar">
           <div className="chat-image-url-row">

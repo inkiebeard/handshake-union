@@ -72,6 +72,9 @@ Three rooms to start:
 - Message reporting (rate-limited, machine-copies content)
 - Delete own messages
 - Link sharing — optional HTTPS URL per message, renders as an Open Graph preview card (title, description, thumbnail) fetched server-side via `og-preview` Edge Function; falls back to Twitter Card tags; skeleton loading state with 30 s client-side timeout
+  - URLs typed inline in the message body are auto-detected and extracted into `link_url` (trailing punctuation stripped); the preview card appears automatically — no 🔗 button required
+  - The 🔗 button provides an alternative manual-entry path for links that aren't in the message text
+  - More than one distinct `https://` URL (across text and manual link bar combined) is an error: send is blocked and an inline warning prompts the user to split into separate messages
 
 ### 3. Onboarding Form
 Collect structured data (all optional, but encouraged):
@@ -682,7 +685,9 @@ AGPL-3.0 — Ensures the code remains open even if someone forks and runs their 
 - **Added:** Messages can now include an optional HTTPS link (`link_url` column on `messages`). Max one link per message; `https://` required; max 2048 chars. Enforced at DB level via CHECK constraint (migration 028).
 - **Added:** `og-preview` Supabase Edge Function — fetches up to 100 KB of the target URL server-side (5 s timeout, `AbortController`), extracts Open Graph meta tags (`og:title`, `og:description`, `og:image`), falls back to Twitter Card equivalents (`twitter:title`, etc.). Authenticated callers only: JWT role is checked via local base64url decode of the payload — no extra network round-trip since the Supabase gateway pre-validates the signature.
 - **Added:** `LinkPreview` component (`src/components/chat/LinkPreview.tsx`) — renders an OG preview card in each message and inside the `MessageInput` link attachment bar. Module-level `ogCache` Map + `pending` deduplication Map prevent redundant edge function calls for the same URL. Skeleton loading state mirrors the rich card layout. 30 s client-side timeout falls back to a plain domain + URL card.
-- **Added:** Live debounced preview in `MessageInput` — 500 ms debounce on the link URL field shows how the preview will appear before sending.
+- **Added:** Live debounced preview in `MessageInput` — 500 ms debounce on the effective link URL (from text or manual bar) shows how the preview will appear before sending.
+- **Added:** Inline URL auto-detection — `https://` URLs typed directly in the message body are extracted with a trailing-punctuation strip regex. The OG preview card appears automatically below the input without opening the 🔗 link bar. Manual bar takes priority if open with content.
+- **Added:** Multi-link validation — if more than one distinct `https://` URL is detected across the message text and the manual link bar, send is blocked and an amber warning asks the user to post each link in a separate message.
 - **Added:** `link_url` included in receipt hash — `create_message_receipt()` and `report_message()` now hash content + image_url + link_url using the existing per-field double-SHA256 scheme (migration 029). `verify_message_authenticity()` updated to accept `alleged_link_url TEXT DEFAULT NULL` for backward compatibility (migration 030).
 - **Fixed:** Migration 028 had two bugs: `SET search_path = ''` hides `extensions.digest()`, and the old `chr(0)` separator scheme was used. Both corrected in migration 029. Functions calling `extensions.digest()` use `SET search_path = 'public, extensions'` — documented exception to the `''` rule.
 - **Not in original plan.**
