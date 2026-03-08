@@ -146,6 +146,7 @@ export interface ModerationReport {
   reason: string | null;
   message_content: string | null;
   message_image_url: string | null;
+  message_link_url: string | null;
   message_author_id: string;
   message_room: ChatRoom;
   message_created_at: string;

@@ -49,8 +49,8 @@ function PreviewSkeleton() {
   );
 }
 
-// Client-side timeout in ms. The edge function has a 5 s internal timeout; adding ~1 s
-// of network overhead gives us a 6 s outer bound before we give up and show the fallback.
+// Client-side timeout — how long to wait for the edge function before giving up
+// and falling back to the plain domain card.
 const PREVIEW_TIMEOUT_MS = 30_000;
 
 export function LinkPreview({ url }: { url: string }) {
