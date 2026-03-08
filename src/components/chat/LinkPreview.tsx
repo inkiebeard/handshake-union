@@ -4,11 +4,14 @@ import { supabase } from '../../lib/supabase';
 interface OgData {
   title: string | null;
   description: string | null;
+  // base64 data URL proxied server-side — viewer IP never touches the CDN.
   image: string | null;
 }
 
 // Module-level cache — shared across all LinkPreview instances.
 // Fetched once per URL per session; covers both input previews and message cards.
+// Capped at CACHE_MAX entries; cleared wholesale when full to bound memory usage.
+const CACHE_MAX = 200;
 const ogCache = new Map<string, OgData | null>();
 // Deduplicates in-flight fetches so multiple components for the same URL share one request.
 const pending = new Map<string, Promise<OgData | null>>();
@@ -21,11 +24,13 @@ async function fetchOg(url: string): Promise<OgData | null> {
     .invoke('og-preview', { body: { url } })
     .then(({ data, error }) => {
       const result = error || !data ? null : (data as OgData);
+      if (ogCache.size >= CACHE_MAX) ogCache.clear();
       ogCache.set(url, result);
       pending.delete(url);
       return result;
     })
     .catch(() => {
+      if (ogCache.size >= CACHE_MAX) ogCache.clear();
       ogCache.set(url, null);
       pending.delete(url);
       return null;
@@ -97,8 +102,6 @@ export function LinkPreview({ url }: { url: string }) {
     };
   }, [url]);
 
-  // Only render https:// OG images — prevents mixed-content issues and referrer leakage.
-  const safeImage = ogData?.image?.startsWith('https://') ? ogData.image : null;
   const hasRichData = !loading && ogData && (ogData.title || ogData.description);
 
   return (
@@ -113,12 +116,11 @@ export function LinkPreview({ url }: { url: string }) {
           <PreviewSkeleton />
         ) : hasRichData ? (
           <div className="chat-link-preview-rich">
-            {safeImage && (
+            {ogData.image && (
               <img
-                src={safeImage}
+                src={ogData.image}
                 alt=""
                 className="chat-link-preview-thumb"
-                referrerPolicy="no-referrer"
                 onError={(e) => { e.currentTarget.style.display = 'none'; }}
               />
             )}

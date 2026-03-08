@@ -28,6 +28,11 @@ function isValidImageUrl(url: string): boolean {
 
 function isValidLinkUrl(url: string): boolean {
   if (url.length > 2048) return false;
+  // startsWith check is case-sensitive, matching the DB CHECK constraint
+  // (link_url ~ '^https://').  new URL() normalises the protocol to lowercase,
+  // so without this guard "HTTPS://example.com" would pass client validation
+  // but fail the DB insert.
+  if (!url.startsWith('https://')) return false;
   try {
     const parsed = new URL(url);
     return parsed.protocol === 'https:';
@@ -400,6 +405,8 @@ export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: Messa
           className={`chat-image-toggle-btn${showLinkInput ? ' is-active' : ''}`}
           onClick={handleToggleLinkInput}
           title={showLinkInput ? 'Remove link' : 'Attach a link'}
+          aria-label={showLinkInput ? 'Remove link' : 'Attach a link'}
+          aria-pressed={showLinkInput}
           disabled={disabled || sending}
         >
           &#128279;
