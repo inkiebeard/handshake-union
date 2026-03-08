@@ -18,7 +18,7 @@ interface ChatContextValue {
   joinRoom: (room: ChatRoom) => void;
   leaveRoom: (room: ChatRoom) => void;
   loadOlderMessages: () => Promise<void>;
-  sendMessage: (content: string, imageUrl?: string | null, replyToId?: string) => Promise<void>;
+  sendMessage: (content: string, imageUrl?: string | null, replyToId?: string, linkUrl?: string | null) => Promise<void>;
   deleteMessage: (id: string) => Promise<void>;
   reportMessage: (id: string, reason?: string) => Promise<string>;
   toggleReaction: (messageId: string, emoji: string) => Promise<void>;
@@ -339,15 +339,16 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
 
   // Send message
   const sendMessage = useCallback(
-    async (content: string, imageUrl?: string | null, replyToId?: string) => {
+    async (content: string, imageUrl?: string | null, replyToId?: string, linkUrl?: string | null) => {
       if (!userId) throw new Error('Not authenticated');
       if (!currentRoom) throw new Error('Not in a room');
 
       const trimmedContent = content.trim() || null;
       const trimmedImageUrl = imageUrl?.trim() || null;
+      const trimmedLinkUrl = linkUrl?.trim() || null;
 
-      if (!trimmedContent && !trimmedImageUrl) {
-        throw new Error('Message must have content or an image');
+      if (!trimmedContent && !trimmedImageUrl && !trimmedLinkUrl) {
+        throw new Error('Message must have content, an image, or a link');
       }
       if (trimmedContent && trimmedContent.length > 2000) {
         throw new Error('Message content must be 2000 characters or fewer');
@@ -358,6 +359,7 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
         profile_id: userId,
         content: trimmedContent,
         image_url: trimmedImageUrl,
+        link_url: trimmedLinkUrl,
         reply_to_id: replyToId ?? null,
       });
 

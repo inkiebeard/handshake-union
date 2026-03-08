@@ -16,14 +16,14 @@
 
 ## Coverage Status
 
-> Last updated: 2026-02-27
+> Last updated: 2026-03-08
 
 All six original MVP feature areas are built. Five of six implementation phases are complete. Phase 6 (Polish & Deploy) is in-flight — partial error handling and loading states exist, deployment config is live on Cloudflare Pages, but a formal test round and README polish remain.
 
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Authentication | ✅ Complete | Magic link only |
-| Live Chat Rooms | ✅ Complete | All 3 rooms, realtime, reactions, custom emotes, image attachments |
+| Live Chat Rooms | ✅ Complete | All 3 rooms, realtime, reactions, custom emotes, image attachments, link sharing with OG preview |
 | Onboarding Form | ✅ Complete | All fields, skip option, reusable in profile mode |
 | Stats Dashboard | ✅ Complete | SVG chart, distribution bars, sample size guards, baselines |
 | Chat Integrity & Moderation | ✅ Complete | Receipts, reports, RBAC, rate limiting |
@@ -41,6 +41,7 @@ All six original MVP feature areas are built. Five of six implementation phases 
 - Cloudflare Pages deployment config
 - Message retention extended to 72 hours (Feb 2026)
 - Cursor-based chat pagination — 50 messages per page, scroll-to-top loads older history (Feb 2026)
+- Link sharing with Open Graph preview cards — optional HTTPS URL per message, OG/Twitter Card metadata fetched server-side via Supabase Edge Function (Mar 2026)
 
 ---
 
@@ -70,6 +71,10 @@ Three rooms to start:
 - Real-time via Supabase broadcast triggers (new messages appended live regardless of pagination state)
 - Message reporting (rate-limited, machine-copies content)
 - Delete own messages
+- Link sharing — optional HTTPS URL per message, renders as an Open Graph preview card (title, description, thumbnail) fetched server-side via `og-preview` Edge Function; falls back to Twitter Card tags; skeleton loading state with 30 s client-side timeout
+  - URLs typed inline in the message body are auto-detected and extracted into `link_url` (trailing punctuation stripped); the preview card appears automatically — no 🔗 button required
+  - The 🔗 button provides an alternative manual-entry path for links that aren't in the message text
+  - More than one distinct `https://` URL (across text and manual link bar combined) is an error: send is blocked and an inline warning prompts the user to split into separate messages
 
 ### 3. Onboarding Form
 Collect structured data (all optional, but encouraged):
@@ -142,9 +147,10 @@ handshake-union/
 │   │   ├── chat/
 │   │   │   ├── EmojiAutocomplete.tsx    # :emoji: autocomplete dropdown
 │   │   │   ├── GiphyPicker.tsx          # Giphy GIF search and insertion
-│   │   │   ├── Message.tsx              # single message with reactions + image
+│   │   │   ├── LinkPreview.tsx          # OG preview card with skeleton loading + timeout
+│   │   │   ├── Message.tsx              # single message with reactions + image + link preview
 │   │   │   ├── MessageErrorBoundary.tsx # per-message error boundary
-│   │   │   ├── MessageInput.tsx         # input with emoji autocomplete + Giphy
+│   │   │   ├── MessageInput.tsx         # input with emoji autocomplete + Giphy + link
 │   │   │   ├── MessageList.tsx          # paginated scrollable message container
 │   │   │   └── ReactionPicker.tsx       # emoji picker for reactions
 │   │   ├── layout/
@@ -193,6 +199,9 @@ handshake-union/
 │   └── vite-env.d.ts
 ├── supabase/
 │   ├── config.toml
+│   ├── functions/
+│   │   └── og-preview/
+│   │       └── index.ts                 # Edge Function: fetch OG/Twitter Card metadata server-side
 │   └── migrations/
 │       ├── 001_initial_schema.sql
 │       ├── 002_varied_pseudonyms.sql
@@ -220,7 +229,10 @@ handshake-union/
 │       ├── 024_image_url_domain_allowlist.sql
 │       ├── 025_access_control_hardening.sql
 │       ├── 026_message_rate_limit.sql
-│       └── 027_pseudonym_oracle_guard.sql
+│       ├── 027_pseudonym_oracle_guard.sql
+│       ├── 028_messages_link_url.sql
+│       ├── 029_fix_link_url_receipt_hash.sql
+│       └── 030_verify_authenticity_link_url.sql
 ├── public/
 │   ├── _headers                            # Cloudflare Pages security headers (CSP etc.)
 │   ├── handshake-union-logo.png
@@ -256,7 +268,8 @@ handshake-union/
 021_fix_verify_functions_hash → 022_update_message_retention_6h →
 023_update_message_retention_72h → 024_image_url_domain_allowlist →
 025_access_control_hardening → 026_message_rate_limit →
-027_pseudonym_oracle_guard
+027_pseudonym_oracle_guard → 028_messages_link_url → 029_fix_link_url_receipt_hash →
+030_verify_authenticity_link_url
 ```
 
 ### Tables
@@ -283,11 +296,12 @@ handshake-union/
 - id: uuid
 - room: enum ('general', 'memes', 'whinge')
 - profile_id: uuid (FK to profiles)
-- content: text (max 2000 chars, nullable — at least one of content/image_url required)
+- content: text (max 2000 chars, nullable — at least one of content/image_url/link_url required)
 - image_url: text (nullable, max 2048 chars — CDN allowlist CHECK constraint, migration 024)
+- link_url: text (nullable, max 2048 chars — https:// required, no domain allowlist; OG preview fetched server-side, migration 028)
 - created_at: timestamp
 - reply_to_id: uuid (nullable, FK to messages)
-- rate limit: max 10 inserts per 60 seconds per profile_id (BEFORE INSERT trigger, migration 027)
+- rate limit: max 10 inserts per 60 seconds per profile_id (BEFORE INSERT trigger, migration 026)
 ```
 
 **reactions**
@@ -331,7 +345,7 @@ handshake-union/
 **message_receipts** (added — cryptographic proof of message existence)
 ```sql
 - id: uuid
-- content_hash: bytea (SHA-256 of message content)
+- content_hash: bytea (SHA-256 of hex(SHA-256(content)) ∥ hex(SHA-256(image_url)) ∥ hex(SHA-256(link_url)) — each field hashed to a fixed 64-char hex string before outer SHA-256; empty string used for NULL fields)
 - room: enum ('general', 'memes', 'whinge')
 - created_at: timestamp (mirrors message created_at)
 - indexes: (content_hash), (room, created_at DESC)
@@ -344,7 +358,9 @@ handshake-union/
 - receipt_id: uuid (FK to message_receipts — tamper-evident link)
 - reporter_id: uuid (FK to profiles)
 - reason: text (nullable, max 500 chars)
-- message_content: text (machine-copied from messages table)
+- message_content: text (machine-copied from messages.content)
+- message_image_url: text (machine-copied from messages.image_url, nullable)
+- message_link_url: text (machine-copied from messages.link_url, nullable — added migration 028)
 - message_author_id: uuid
 - message_room: enum
 - message_created_at: timestamp
@@ -382,10 +398,11 @@ handshake-union/
 - `capture_profile_snapshot()` — trigger: snapshots work fields on change
 - `capture_initial_snapshot()` — trigger: snapshots when onboarding_complete flips to true
 
-**Chat integrity (migration 006):**
-- `create_message_receipt()` — trigger: auto-creates SHA-256 receipt on message INSERT (SECURITY DEFINER)
-- `report_message(target_message_id, reason)` — live report: machine-copies message content + links to receipt. Rate-limited (10/hr). Prevents self-reports and duplicates.
+**Chat integrity (migration 006; hash updated 029; verify updated 030):**
+- `create_message_receipt()` — trigger: auto-creates SHA-256 receipt on message INSERT (SECURITY DEFINER). Hash covers content + image_url + link_url using per-field double-SHA256 scheme (updated migration 029). Uses `SET search_path = 'public, extensions'` — required to resolve `extensions.digest()` (pgcrypto).
+- `report_message(target_message_id, reason)` — live report: machine-copies content, image_url, and link_url from DB + links to receipt. Rate-limited (10/hr). Prevents self-reports and duplicates.
 - `resolve_report(report_id, status, notes)` — moderator+: resolves a pending moderation report
+- `verify_message_authenticity(content, room, timestamp, image_url, link_url)` — returns true if a receipt exists matching all alleged fields via the 3-field hash. `image_url` and `link_url` default to NULL for backward compatibility (migration 030).
 
 **Role management (migration 007):**
 - `is_moderator()` — JWT claim check: returns true for moderator or admin
@@ -587,10 +604,11 @@ Two scheduled crons (requires pg_cron extension — commented in migration, run 
 - **Pseudonymous by default** — real identity never exposed
 - **Row Level Security** — database-level access control
 - **Privacy lockdown** — profiles restricted to own-row reads; stats exposed only via aggregate functions (no individual data enumeration)
-- **Pseudonym oracle hardened** — `get_pseudonym()` only resolves users who have sent at least one message, preventing cold UUID enumeration (migration 028)
+- **Pseudonym oracle hardened** — `get_pseudonym()` only resolves users who have sent at least one message, preventing cold UUID enumeration (migration 027)
 - **Search path security** — all DB functions use `SET search_path = ''` to prevent injection
 - **Ephemeral messages** — 72-hour TTL; rate-limited to 10 messages/minute per user via BEFORE INSERT trigger (migration 027)
 - **Image URL domain allowlist** — `image_url` accepts only approved CDN providers (GIPHY, Tenor, Imgur) via a DB CHECK constraint and client-side regex. Providers controlled by `ALLOWED_IMAGE_PROVIDERS` in `src/lib/constants.ts` (migration 024)
+- **Link URL security** — `link_url` enforces `https://` and max 2048 chars at the DB level (migration 028). No domain allowlist (links are user-shared content, not embedded media). OG metadata is fetched server-side by the `og-preview` Edge Function — the browser never requests the target URL directly. OG images are guarded client-side: only `https://` URLs rendered, with `referrerPolicy="no-referrer"` and `rel="noopener noreferrer"` on all link anchors
 - **Country field validated** — CHECK constraint on `profiles` and `profile_snapshots` enforces allowed values at DB level (migration 026)
 - **Custom emotes authenticated-only** — `anon` role removed; all endpoints require authentication (migration 025)
 - **Cryptographic receipts** — SHA-256 hashes prove message existence without retaining readable content. Invisible to all user-facing roles (RLS deny-all). Enables screenshot verification.
@@ -662,6 +680,19 @@ AGPL-3.0 — Ensures the code remains open even if someone forks and runs their 
 
 > Tracks scope changes, feature additions, and meaningful deviations from the original plan over the life of the project. Migrations and bug fixes are listed separately in `supabase/migrations/`.
 
+### 2026-03-08 — Link sharing with Open Graph preview
+
+- **Added:** Messages can now include an optional HTTPS link (`link_url` column on `messages`). Max one link per message; `https://` required; max 2048 chars. Enforced at DB level via CHECK constraint (migration 028).
+- **Added:** `og-preview` Supabase Edge Function — fetches up to 100 KB of the target URL server-side (5 s timeout, `AbortController`), extracts Open Graph meta tags (`og:title`, `og:description`, `og:image`), falls back to Twitter Card equivalents (`twitter:title`, etc.). Authenticated callers only: JWT role is checked via local base64url decode of the payload — no extra network round-trip since the Supabase gateway pre-validates the signature.
+- **Added:** `LinkPreview` component (`src/components/chat/LinkPreview.tsx`) — renders an OG preview card in each message and inside the `MessageInput` link attachment bar. Module-level `ogCache` Map + `pending` deduplication Map prevent redundant edge function calls for the same URL. Skeleton loading state mirrors the rich card layout. 30 s client-side timeout falls back to a plain domain + URL card.
+- **Added:** Live debounced preview in `MessageInput` — 500 ms debounce on the effective link URL (from text or manual bar) shows how the preview will appear before sending.
+- **Added:** Inline URL auto-detection — `https://` URLs typed directly in the message body are extracted with a trailing-punctuation strip regex. The OG preview card appears automatically below the input without opening the 🔗 link bar. Manual bar takes priority if open with content.
+- **Added:** Multi-link validation — if more than one distinct `https://` URL is detected across the message text and the manual link bar, send is blocked and an amber warning asks the user to post each link in a separate message.
+- **Added:** `link_url` included in receipt hash — `create_message_receipt()` and `report_message()` now hash content + image_url + link_url using the existing per-field double-SHA256 scheme (migration 029). `verify_message_authenticity()` updated to accept `alleged_link_url TEXT DEFAULT NULL` for backward compatibility (migration 030).
+- **Fixed:** Migration 028 had two bugs: `SET search_path = ''` hides `extensions.digest()`, and the old `chr(0)` separator scheme was used. Both corrected in migration 029. Functions calling `extensions.digest()` use `SET search_path = 'public, extensions'` — documented exception to the `''` rule.
+- **Not in original plan.**
+- **Affected:** `src/components/chat/LinkPreview.tsx` (new), `src/components/chat/Message.tsx`, `src/components/chat/MessageInput.tsx`, `src/contexts/ChatContext.tsx`, `src/types/database.ts`, `src/index.css`, `supabase/functions/og-preview/index.ts` (new), migrations 028–030.
+
 ### 2026-03-02 — Cloudflare Turnstile bot protection
 - **Added:** Cloudflare Turnstile CAPTCHA on the login page (`/login`) only. Prevents automated account creation and magic link flooding. Token is passed to `supabase.auth.signInWithOtp()` via `options.captchaToken` and verified server-side by Supabase against the Turnstile secret key.
 - **Added:** `VITE_TURNSTILE_SITE_KEY` environment variable. Secret key configured in Supabase Auth → Bot and Abuse Protection.
@@ -676,7 +707,7 @@ AGPL-3.0 — Ensures the code remains open even if someone forks and runs their 
 - **Added:** Custom emotes restricted to authenticated users — `anon` role grant revoked (migration 025).
 - **Added:** Country field CHECK constraint on `profiles` and `profile_snapshots` — enforces `'Australia' | 'New Zealand' | 'Other'` at DB level (migration 026).
 - **Added:** Server-side message rate limit — BEFORE INSERT trigger, max 10 messages per 60 seconds per user (migration 027).
-- **Hardened:** `get_pseudonym()` now only resolves users who have sent at least one message, breaking cold UUID enumeration (migration 028).
+- **Hardened:** `get_pseudonym()` now only resolves users who have sent at least one message, breaking cold UUID enumeration (migration 027).
 - **Added:** `public/_headers` — CSP, X-Frame-Options, Referrer-Policy, Permissions-Policy served at the edge by Cloudflare Pages.
 - **Removed:** `console.log` calls from `ChatContext.tsx` that were leaking broadcast payloads (message content, room, user IDs) to the browser console.
 - **Affected:** `Login.tsx`, `Privacy.tsx`, `ChatContext.tsx`, `MessageInput.tsx`, `src/lib/constants.ts`, `public/_headers`, migrations 024–028, `PLAN.md`, `README.md`, `AGENTS.md`.

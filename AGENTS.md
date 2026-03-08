@@ -43,9 +43,9 @@ This is an anonymous developer solidarity platform. Every decision should reinfo
 - **Supabase is the entire backend.** No custom API server. Auth, Postgres, Realtime, and RLS handle everything.
 - **Row Level Security enforces access control.** Profiles are own-row-only reads. Messages are authenticated-read, own-write. Receipts deny ALL for authenticated users. Never bypass RLS from the frontend.
 - **Aggregate functions for stats.** Individual profile data is never exposed. All stats go through `get_salary_distribution()`, `get_role_distribution()`, etc.
-- **Migrations are sequential and numbered.** `supabase/migrations/001_*.sql` through `027_*.sql`. New migrations continue the sequence.
+- **Migrations are sequential and numbered.** `supabase/migrations/001_*.sql` through `030_*.sql`. New migrations continue the sequence.
 - **Consolidate migrations by feature, not by change.** Group all related schema changes (constraints, policies, triggers, indexes, grants) for a single feature into one migration file. Do not create a new migration file for each incremental fix or follow-up to an unrun migration — amend the existing file instead. Only create a separate migration when: (a) the user explicitly requests it, (b) migrations have already been run against a live/staging database, or (c) the user provides explicit context that separate files are needed.
-- **All DB functions use `SET search_path = ''`.** This is a security requirement — prevents search path injection.
+- **All DB functions use `SET search_path = ''`.** This is a security requirement — prevents search path injection. **Exception:** functions that call `extensions.digest()` (pgcrypto) must use `SET search_path = 'public, extensions'` instead — the empty path hides the `extensions` schema and causes a `function digest(text, unknown) does not exist` error. See security invariant 6.
 - **Three-tier RBAC.** `member` (default) / `moderator` / `admin` via JWT `app_metadata` claims. Check with `is_moderator()` / `is_admin()` in RLS policies.
 - **Cryptographic receipts are system-level only.** `message_receipts` are invisible to all user-facing roles. They exist for tamper-evident moderation, not for display.
 
@@ -73,7 +73,7 @@ These must never be violated:
 3. **Moderation reports machine-copy content from DB.** Never accept user-provided message content for reports.
 4. **Sample size guards on salary data.** n < 30 = data hidden. This protects small-group privacy.
 5. **Messages are ephemeral.** 72-hour TTL enforced by pg_cron. Don't add features that persist message content beyond this window (receipts store hashes, not content).
-6. **Search path hardened.** Every new DB function must include `SET search_path = ''`.
+6. **Search path hardened.** Every new DB function must include `SET search_path = ''`. **Exception:** functions that call `extensions.digest()` (pgcrypto) must use `SET search_path = 'public, extensions'` — the empty path hides the `extensions` schema and causes `function digest(text, unknown) does not exist`. This applies to `create_message_receipt()`, `report_message()`, `verify_message_authenticity()`, and any future function using pgcrypto digest. The narrow exception does not weaken the search path invariant because the only addition is the read-only `extensions` schema containing pgcrypto.
 7. **CDN-allowlisted image URLs.** The `image_url` column enforces both `https://` and an approved-domain CHECK constraint at the DB level. Permitted providers are `ALLOWED_IMAGE_PROVIDERS` in `src/lib/constants.ts`; the compiled regex `ALLOWED_IMAGE_HOSTNAME_RE` is used for client-side validation. Never widen this to bare `https://` — it enables tracking pixels and SSRF.
 8. **Turnstile is login-only.** Cloudflare Turnstile is intentionally scoped to `Login.tsx` for bot protection at the authentication gate. Do not add it to any other page or user flow. The Turnstile secret key must never appear in frontend code — it lives exclusively in Supabase Auth settings.
 
