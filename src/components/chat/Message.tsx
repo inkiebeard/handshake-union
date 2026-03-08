@@ -3,6 +3,7 @@ import { PixelAvatar } from "../PixelAvatar";
 import { ReactionPicker } from "./ReactionPicker";
 import { EmojiText, getEmoji } from "../../lib/emoji";
 import { imagePreloadCache, preloadImage } from "../../lib/imagePreloadCache";
+import { LinkPreview } from "./LinkPreview";
 import type { Message as MessageType } from "../../types/database";
 import type { ImageDisplayMode } from "../../hooks/useImageDisplayMode";
 
@@ -231,6 +232,11 @@ export function Message({ message, currentUserId, reactions, replyTarget, imageD
           {/* Attached image */}
           {message.image_url && (
             <MessageImage url={message.image_url} mode={imageDisplayMode} onLoad={onImageLoad} />
+          )}
+
+          {/* Attached link */}
+          {message.link_url && (
+            <LinkPreview url={message.link_url} />
           )}
 
           {/* Reactions */}

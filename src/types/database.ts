@@ -93,6 +93,7 @@ export interface Message {
   profile_id: string;
   content: string | null;
   image_url: string | null;
+  link_url: string | null;
   created_at: string;
   reply_to_id: string | null;
   // Joined fields

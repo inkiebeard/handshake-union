@@ -1,7 +1,8 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { EmojiAutocomplete } from './EmojiAutocomplete';
 import { GiphyPicker, fireGiphyAnalytics } from './GiphyPicker';
 import { EmojiText } from '../../lib/emoji';
+import { LinkPreview } from './LinkPreview';
 import type { Emoji } from '../../lib/emoji';
 import type { Message } from '../../types/database';
 import { ALLOWED_IMAGE_HOSTNAME_RE, ALLOWED_IMAGE_PROVIDERS } from '../../lib/constants';
@@ -25,8 +26,18 @@ function isValidImageUrl(url: string): boolean {
   }
 }
 
+function isValidLinkUrl(url: string): boolean {
+  if (url.length > 2048) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 interface MessageInputProps {
-  onSend: (content: string, imageUrl?: string | null, replyToId?: string) => Promise<void>;
+  onSend: (content: string, imageUrl?: string | null, replyToId?: string, linkUrl?: string | null) => Promise<void>;
   replyTo: Message | null;
   onCancelReply: () => void;
   disabled?: boolean;
@@ -41,16 +52,29 @@ export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: Messa
   const [hasAutocompleteResults, setHasAutocompleteResults] = useState(false);
   const [showImageInput, setShowImageInput] = useState(false);
   const [showGiphyPicker, setShowGiphyPicker] = useState(false);
+  const [showLinkInput, setShowLinkInput] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
   const [gifOnsentUrl, setGifOnsentUrl] = useState('');
+  const [linkUrl, setLinkUrl] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const imageUrlTrimmed = imageUrl.trim();
   const hasImage = imageUrlTrimmed.length > 0;
   const imageUrlInvalid = hasImage && !isValidImageUrl(imageUrlTrimmed);
 
+  const linkUrlTrimmed = linkUrl.trim();
+  const hasLink = linkUrlTrimmed.length > 0;
+  const linkUrlInvalid = hasLink && !isValidLinkUrl(linkUrlTrimmed);
+
+  const [debouncedLinkUrl, setDebouncedLinkUrl] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedLinkUrl(linkUrlTrimmed), 500);
+    return () => clearTimeout(timer);
+  }, [linkUrlTrimmed]);
+  const showLinkPreview = debouncedLinkUrl.length > 0 && isValidLinkUrl(debouncedLinkUrl);
+
   const hasContent = content.trim().length > 0;
-  const canSend = (hasContent || (hasImage && !imageUrlInvalid)) && !imageUrlInvalid;
+  const canSend = (hasContent || (hasImage && !imageUrlInvalid) || (hasLink && !linkUrlInvalid)) && !imageUrlInvalid && !linkUrlInvalid;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,7 +84,7 @@ export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: Messa
     setError(null);
 
     try {
-      await onSend(content, hasImage ? imageUrlTrimmed : null, replyTo?.id);
+      await onSend(content, hasImage ? imageUrlTrimmed : null, replyTo?.id, hasLink ? linkUrlTrimmed : null);
       // Fire onsent analytics after the message actually delivers
       if (gifOnsentUrl) {
         fireGiphyAnalytics(gifOnsentUrl);
@@ -69,6 +93,9 @@ export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: Messa
       setContent('');
       setImageUrl('');
       setShowImageInput(false);
+      setLinkUrl('');
+      setDebouncedLinkUrl('');
+      setShowLinkInput(false);
       onCancelReply();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send');
@@ -157,6 +184,16 @@ export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: Messa
     setShowGiphyPicker((prev) => !prev);
   };
 
+  const handleToggleLinkInput = () => {
+    setShowLinkInput((prev) => {
+      if (prev) {
+        setLinkUrl('');
+        setDebouncedLinkUrl('');
+      }
+      return !prev;
+    });
+  };
+
   const handleGifSelect = (url: string, onsentUrl: string) => {
     setImageUrl(url);
     setGifOnsentUrl(onsentUrl);
@@ -202,6 +239,41 @@ export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: Messa
           onSelect={handleGifSelect}
           onClose={() => setShowGiphyPicker(false)}
         />
+      )}
+
+      {/* Link URL input */}
+      {showLinkInput && (
+        <div className="chat-image-url-bar">
+          <div className="chat-image-url-row">
+            <input
+              type="url"
+              className={`chat-image-url-input${linkUrlInvalid ? ' is-invalid' : ''}`}
+              placeholder="link url (https://...)"
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              disabled={disabled || sending}
+            />
+            <button
+              type="button"
+              className="chat-image-url-clear"
+              onClick={() => {
+                setLinkUrl('');
+                setDebouncedLinkUrl('');
+                setShowLinkInput(false);
+              }}
+              disabled={disabled || sending}
+              title="Remove link"
+            >
+              &times;
+            </button>
+          </div>
+          {linkUrlInvalid && (
+            <span className="chat-image-url-error">
+              must be a valid https:// URL
+            </span>
+          )}
+          {showLinkPreview && <LinkPreview url={debouncedLinkUrl} />}
+        </div>
       )}
 
       {/* Image URL input */}
@@ -281,6 +353,15 @@ export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: Messa
           disabled={disabled || sending}
         >
           GIF
+        </button>
+        <button
+          type="button"
+          className={`chat-image-toggle-btn${showLinkInput ? ' is-active' : ''}`}
+          onClick={handleToggleLinkInput}
+          title={showLinkInput ? 'Remove link' : 'Attach a link'}
+          disabled={disabled || sending}
+        >
+          &#128279;
         </button>
         <div className="chat-textarea-wrapper">
           <textarea
