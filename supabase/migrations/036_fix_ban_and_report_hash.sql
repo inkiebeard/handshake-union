@@ -82,7 +82,18 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 GRANT EXECUTE ON FUNCTION public.ban_user(UUID, TEXT, TEXT, TIMESTAMPTZ) TO authenticated;
 
 -- ============================================
--- 2. report_message() — correct hash scheme + legacy fallback
+-- 2. moderation_reports.message_content — relax NOT NULL
+-- ============================================
+-- messages.content is nullable (image-only / link-only messages since migration 018).
+-- The original NOT NULL constraint on message_content would cause report_message() to
+-- fail when reporting such messages. Relax it to allow NULL consistently with the
+-- frontend ModerationReport type (message_content: string | null).
+
+ALTER TABLE public.moderation_reports
+  ALTER COLUMN message_content DROP NOT NULL;
+
+-- ============================================
+-- 3. report_message() — correct hash scheme + legacy fallback
 -- ============================================
 -- Hash scheme: SHA256(hex(SHA256(f1)) || hex(SHA256(f2)) || ...) — no separators.
 -- Also fixes NULL-safe duplicate detection via IS NOT DISTINCT FROM.
