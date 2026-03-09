@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useModerationReports } from '../hooks/useModerationReports';
 import { LinkPreview } from '../components/chat/LinkPreview';
 import type { ReportWithPseudonyms, UserBan, ModerationReportStatus } from '../types/database';
@@ -50,7 +50,7 @@ const STATUS_COLORS: Record<ModerationReportStatus, string> = {
 interface BanFormProps {
   authorProfileId: string;
   authorPseudonym: string;
-  onBan: (banType: 'timeout' | 'permanent', reason: string, expiresAt: string) => Promise<void>;
+  onBan: (banType: 'timeout' | 'permanent', reason: string, expiresAt: string | undefined) => Promise<void>;
   onClose: () => void;
 }
 
@@ -61,7 +61,7 @@ function BanForm({ authorPseudonym, onBan, onClose }: BanFormProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
@@ -169,7 +169,7 @@ function BanForm({ authorPseudonym, onBan, onClose }: BanFormProps) {
 interface ReportCardProps {
   report: ReportWithPseudonyms;
   onResolve: (id: string, status: Exclude<ModerationReportStatus, 'pending'>, notes?: string) => Promise<void>;
-  onBan: (targetProfileId: string, banType: 'timeout' | 'permanent', reason: string, expiresAt: string) => Promise<void>;
+  onBan: (targetProfileId: string, banType: 'timeout' | 'permanent', reason: string, expiresAt: string | undefined) => Promise<void>;
 }
 
 function ReportCard({ report, onResolve, onBan }: ReportCardProps) {
@@ -193,7 +193,7 @@ function ReportCard({ report, onResolve, onBan }: ReportCardProps) {
     }
   };
 
-  const handleBan = async (banType: 'timeout' | 'permanent', reason: string, expiresAt: string) => {
+  const handleBan = async (banType: 'timeout' | 'permanent', reason: string, expiresAt: string | undefined) => {
     await onBan(report.message_author_profile_id, banType, reason, expiresAt);
   };
 
@@ -355,6 +355,7 @@ function BanCard({ ban, onLift }: BanCardProps) {
       await onLift(ban.id);
     } catch (err) {
       setError(extractErrorMessage(err, 'Failed to lift ban'));
+    } finally {
       setLifting(false);
     }
   };
