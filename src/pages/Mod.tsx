@@ -69,7 +69,7 @@ function BanForm({ authorPseudonym, onBan, onClose }: BanFormProps) {
       const expiresAt =
         banType === 'timeout'
           ? new Date(Date.now() + Number(hours) * 3_600_000).toISOString()
-          : '';
+          : undefined;
       await onBan(banType, reason, expiresAt);
       onClose();
     } catch (err) {

@@ -110,10 +110,9 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
 -- ============================================
--- 6. report_message() — explicit check (SECURITY DEFINER bypasses RLS)
+-- 6. report_message() — prepend ban check only
 -- ============================================
--- Banned users should not be able to submit reports.
--- Re-create with ban check prepended; all other logic unchanged.
+-- SECURITY DEFINER bypasses RLS so the ban check must be explicit.
 
 CREATE OR REPLACE FUNCTION public.report_message(
   target_message_id UUID,
@@ -121,23 +120,21 @@ CREATE OR REPLACE FUNCTION public.report_message(
 )
 RETURNS UUID AS $$
 DECLARE
-  msg RECORD;
-  receipt RECORD;
-  report_count INT;
+  msg             RECORD;
+  receipt         RECORD;
+  report_count    INT;
   existing_report UUID;
-  new_report_id UUID;
+  new_report_id   UUID;
 BEGIN
-  -- Auth check
   IF auth.uid() IS NULL THEN
     RAISE EXCEPTION 'authentication required';
   END IF;
 
-  -- Ban check — SECURITY DEFINER bypasses RLS so must be explicit
+  -- Ban check — must be explicit because SECURITY DEFINER bypasses RLS
   IF public.is_banned() THEN
     RAISE EXCEPTION 'your account is currently banned';
   END IF;
 
-  -- Rate limit: max 10 reports per hour per user
   SELECT count(*) INTO report_count
   FROM public.moderation_reports
   WHERE reporter_id = auth.uid()
@@ -147,22 +144,19 @@ BEGIN
     RAISE EXCEPTION 'rate limit exceeded: maximum 10 reports per hour';
   END IF;
 
-  -- Look up the message — must still exist
   SELECT id, room, profile_id, content, image_url, link_url, created_at
   INTO msg
   FROM public.messages
   WHERE id = target_message_id;
 
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'message not found — it may have expired';
+    RAISE EXCEPTION 'message not found — it may have expired.';
   END IF;
 
-  -- Prevent self-reporting
   IF msg.profile_id = auth.uid() THEN
     RAISE EXCEPTION 'cannot report your own message';
   END IF;
 
-  -- Prevent duplicate reports
   SELECT id INTO existing_report
   FROM public.moderation_reports
   WHERE reporter_id = auth.uid()
@@ -174,7 +168,7 @@ BEGIN
     RAISE EXCEPTION 'you have already reported this message';
   END IF;
 
-  -- Find the matching receipt
+  -- NOTE: hash uses '|' separators — this is a bug fixed in migration 036.
   SELECT r.id INTO receipt
   FROM public.message_receipts r
   WHERE r.content_hash = extensions.digest(
@@ -191,27 +185,14 @@ BEGIN
     RAISE EXCEPTION 'integrity error: no receipt found for this message';
   END IF;
 
-  -- Create the report
   INSERT INTO public.moderation_reports (
-    receipt_id,
-    reporter_id,
-    reason,
-    message_content,
-    message_image_url,
-    message_link_url,
-    message_author_id,
-    message_room,
-    message_created_at
+    receipt_id, reporter_id, reason,
+    message_content, message_image_url, message_link_url,
+    message_author_id, message_room, message_created_at
   ) VALUES (
-    receipt.id,
-    auth.uid(),
-    report_reason,
-    msg.content,
-    msg.image_url,
-    msg.link_url,
-    msg.profile_id,
-    msg.room,
-    msg.created_at
+    receipt.id, auth.uid(), report_reason,
+    msg.content, msg.image_url, msg.link_url,
+    msg.profile_id, msg.room, msg.created_at
   )
   RETURNING id INTO new_report_id;
 
