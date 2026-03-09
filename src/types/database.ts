@@ -168,3 +168,64 @@ export interface CustomEmote {
   created_at: string;
   created_by: string | null;
 }
+
+// ============================================
+// Moderation portal types
+// ============================================
+
+export type BanType = 'timeout' | 'permanent';
+
+export interface UserBan {
+  id: string;
+  profile_id: string;
+  pseudonym: string;
+  ban_type: BanType;
+  reason: string | null;
+  banned_at: string;
+  expires_at: string | null;
+  banned_by_pseudonym: string;
+}
+
+export interface ReportWithPseudonyms {
+  id: string;
+  receipt_id: string;
+  reporter_pseudonym: string;
+  reason: string | null;
+  message_content: string | null;
+  message_image_url: string | null;
+  message_link_url: string | null;
+  message_author_pseudonym: string;
+  message_author_profile_id: string;
+  message_room: ChatRoom;
+  message_created_at: string;
+  reported_at: string;
+  status: ModerationReportStatus;
+  resolved_at: string | null;
+  resolution_notes: string | null;
+  expires_at: string;
+}
+
+// ============================================
+// Admin portal types
+// ============================================
+
+export interface PlatformOverview {
+  total_members: number;
+  active_sessions: number;
+  pending_reports: number;
+  active_bans: number;
+  messages_24h: number;
+}
+
+export interface ActivityDataPoint {
+  day: string;
+  count: number;
+}
+
+export interface UserRoleEntry {
+  profile_id: string;
+  pseudonym: string;
+  role: UserRole;
+  member_since: string;
+  message_count: number;
+}

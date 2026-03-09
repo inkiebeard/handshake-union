@@ -4,12 +4,17 @@ import { useAuth } from '../../hooks/useAuth';
 import { useProfile } from '../../hooks/useProfile';
 import { supabase } from '../../lib/supabase';
 import { PixelAvatar } from '../PixelAvatar';
+import type { UserRole } from '../../types/database';
 
 export function Navbar() {
   const { user } = useAuth();
   const { profile } = useProfile(user?.id);
   const navigate = useNavigate();
   const [burgerActive, setBurgerActive] = useState(false);
+
+  const role = user?.app_metadata?.role as UserRole | undefined;
+  const isMod   = role === 'moderator' || role === 'admin';
+  const isAdmin = role === 'admin';
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -45,6 +50,24 @@ export function Navbar() {
                 <Link className="navbar-item" to="/stats">/stats</Link>
                 <Link className="navbar-item" to="/members">/members</Link>
                 <Link className="navbar-item" to="/profile">/profile</Link>
+                {isMod && (
+                  <Link
+                    className="navbar-item"
+                    to="/mod"
+                    style={{ color: 'var(--color-warning, #f5a623)' }}
+                  >
+                    /mod
+                  </Link>
+                )}
+                {isAdmin && (
+                  <Link
+                    className="navbar-item"
+                    to="/admin"
+                    style={{ color: '#ff7b72' }}
+                  >
+                    /admin
+                  </Link>
+                )}
               </div>
               <div className="navbar-end">
                 {profile && (

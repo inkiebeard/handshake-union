@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Layout } from './components/layout/Layout';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { RoleRoute } from './components/auth/RoleRoute';
 import { ChatProvider } from './contexts/ChatContext';
 import { EmoteProvider } from './contexts/EmoteContext';
 import { useAuth } from './hooks/useAuth';
@@ -13,6 +14,8 @@ import { Profile } from './pages/Profile';
 import { Stats } from './pages/Stats';
 import { Members } from './pages/Members';
 import { Privacy } from './pages/Privacy';
+import { Mod } from './pages/Mod';
+import { Admin } from './pages/Admin';
 import { NotFound } from './pages/NotFound';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
@@ -65,6 +68,22 @@ function AppRoutes() {
               <ProtectedRoute>
                 <Members />
               </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/mod"
+            element={
+              <RoleRoute minRole="moderator">
+                <Mod />
+              </RoleRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <RoleRoute minRole="admin">
+                <Admin />
+              </RoleRoute>
             }
           />
           <Route path="*" element={<NotFound />} />

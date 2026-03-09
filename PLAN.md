@@ -18,7 +18,7 @@
 
 > Last updated: 2026-03-08
 
-All six original MVP feature areas are built. Five of six implementation phases are complete. Phase 6 (Polish & Deploy) is in-flight — partial error handling and loading states exist, deployment config is live on Cloudflare Pages, but a formal test round and README polish remain.
+All six original MVP feature areas are built plus a full moderation and admin portal. Five of six implementation phases are complete, with a seventh phase added for the portal. Phase 6 (Polish & Deploy) is in-flight — partial error handling and loading states exist, deployment config is live on Cloudflare Pages, but a formal test round and README polish remain.
 
 | Feature | Status | Notes |
 |---------|--------|-------|
@@ -28,6 +28,7 @@ All six original MVP feature areas are built. Five of six implementation phases 
 | Stats Dashboard | ✅ Complete | SVG chart, distribution bars, sample size guards, baselines |
 | Chat Integrity & Moderation | ✅ Complete | Receipts, reports, RBAC, rate limiting |
 | Role-Based Access Control | ✅ Complete | member/moderator/admin via JWT claims |
+| Moderation & Admin Portal | ✅ Complete | `/mod` queue + bans (moderator+), `/admin` overview + charts + roles (admin) |
 | Polish & Deploy | 🔲 In Progress | Error handling partial, Cloudflare deployed, test round pending |
 
 **Post-plan additions (scope expansions):**
@@ -42,6 +43,7 @@ All six original MVP feature areas are built. Five of six implementation phases 
 - Message retention extended to 72 hours (Feb 2026)
 - Cursor-based chat pagination — 50 messages per page, scroll-to-top loads older history (Feb 2026)
 - Link sharing with Open Graph preview cards — optional HTTPS URL per message, OG/Twitter Card metadata fetched server-side via Supabase Edge Function (Mar 2026)
+- Moderation & Admin portal — `/mod` + `/admin` role-gated dashboards, user ban system (Mar 2026)
 
 ---
 
@@ -110,12 +112,32 @@ Three-tier system via JWT `app_metadata` claims:
 | Role | Default? | Access |
 |------|----------|--------|
 | `member` | Yes (set on signup) | Chat, own profile, report messages, view stats |
-| `moderator` | No (assigned by admin) | + View/resolve moderation reports |
-| `admin` | No (assigned by admin) | + Verify receipts, assign roles, system dashboards |
+| `moderator` | No (assigned by admin) | + View/resolve moderation reports, issue/lift bans |
+| `admin` | No (assigned by admin) | + Verify receipts, assign roles, platform health dashboard |
 
 - `service_role` key bypasses RLS entirely (automated processes only)
 - Roles checked via `is_moderator()` / `is_admin()` helper functions in RLS policies
 - Receipts invisible to all human roles — only accessible via admin `verify_message_receipt()` function
+- First admin must be bootstrapped directly via Supabase SQL editor (update `raw_app_meta_data`); all subsequent role changes go through the `/admin` portal
+
+### 7. Moderation & Admin Portal
+
+**Moderation Portal (`/mod` — moderator+):**
+- Moderation queue showing all reports with status filter tabs (pending / reviewed / actioned / dismissed / all)
+- Each report card displays: message text, images rendered inline, link preview cards (via `LinkPreview`), reporter + author pseudonyms, room, reason, timestamp
+- One-click resolve actions: reviewed, actioned, dismiss — with optional resolution notes field
+- Inline "ban author" form on each pending report — issue a timeout (hours, requires `expires_at`) or permanent ban with optional reason, without leaving the queue
+- Active bans tab showing all unexpired/unlifted bans; lift-ban button on each entry
+- Pending count badge on queue tab; active ban count badge on bans tab
+
+**Admin Portal (`/admin` — admin only):**
+- Platform overview cards: total members, active sessions (live count from `auth.sessions`), pending reports, active bans, messages in last 24 h (from receipts)
+- Activity charts — SVG bar charts (terminal aesthetic, no external charting library) for login activity (unique logins/day from `auth.audit_log_entries`) and message activity (messages/day from `message_receipts`), configurable 7 / 14 / 30 / 90 day windows
+- Role management table — search all users by pseudonym; inline role dropdown (member / moderator / admin) with apply button; sorted by role seniority then join date
+
+**`RoleRoute` component** — extends `ProtectedRoute`: reads `user.app_metadata.role` from the Supabase JWT, redirects unauthorized users to `/` with no error exposure
+
+**Navbar** — `/mod` link shown in warning colour to moderator+; `/admin` link shown in red to admins only; both invisible to members
 
 ---
 
@@ -143,7 +165,8 @@ handshake-union/
 ├── src/
 │   ├── components/
 │   │   ├── auth/
-│   │   │   └── ProtectedRoute.tsx
+│   │   │   ├── ProtectedRoute.tsx
+│   │   │   └── RoleRoute.tsx           # role-gated route (moderator+ or admin-only)
 │   │   ├── chat/
 │   │   │   ├── EmojiAutocomplete.tsx    # :emoji: autocomplete dropdown
 │   │   │   ├── GiphyPicker.tsx          # Giphy GIF search and insertion
@@ -170,10 +193,12 @@ handshake-union/
 │   │   ├── ChatContext.tsx             # chat state, pagination, reactions, realtime
 │   │   └── EmoteContext.tsx            # custom emote provider
 │   ├── hooks/
+│   │   ├── useAdminStats.ts            # platform overview + activity charts + user roles (admin)
 │   │   ├── useAuth.ts
 │   │   ├── useCustomEmotes.ts          # custom emote fetching
 │   │   ├── useImageDisplayMode.ts      # per-session blur/reveal toggle state
 │   │   ├── useMembers.ts               # public member directory stats
+│   │   ├── useModerationReports.ts     # mod queue + bans + resolve/ban/lift actions
 │   │   ├── useProfile.ts
 │   │   ├── useReactionHistory.ts       # persists recent emoji reactions to localStorage
 │   │   └── useStats.ts                 # aggregate stats + baselines + utilities
@@ -182,11 +207,13 @@ handshake-union/
 │   │   ├── emoji.tsx                   # emoji rendering utilities
 │   │   └── supabase.ts
 │   ├── pages/
+│   │   ├── Admin.tsx                   # admin portal: overview cards, activity charts, role mgmt
 │   │   ├── AuthCallback.tsx
 │   │   ├── Chat.tsx                    # full chat with rooms + realtime
 │   │   ├── Home.tsx
 │   │   ├── Login.tsx
 │   │   ├── Members.tsx                 # public member directory
+│   │   ├── Mod.tsx                     # mod portal: report queue + active bans
 │   │   ├── Onboarding.tsx
 │   │   ├── Privacy.tsx                 # privacy policy page
 │   │   ├── Profile.tsx
@@ -232,7 +259,13 @@ handshake-union/
 │       ├── 027_pseudonym_oracle_guard.sql
 │       ├── 028_messages_link_url.sql
 │       ├── 029_fix_link_url_receipt_hash.sql
-│       └── 030_verify_authenticity_link_url.sql
+│       ├── 030_verify_authenticity_link_url.sql
+│       ├── 031_legacy_hash_fallback_and_link_url_dedup.sql
+│       ├── 032_mod_admin_portal.sql
+│       ├── 033_fix_resolve_report.sql
+│       ├── 034_ban_auth_integration.sql
+│       ├── 035_ban_enforcement.sql
+│       └── 036_fix_ban_and_report_hash.sql
 ├── public/
 │   ├── _headers                            # Cloudflare Pages security headers (CSP etc.)
 │   ├── handshake-union-logo.png
@@ -269,7 +302,9 @@ handshake-union/
 023_update_message_retention_72h → 024_image_url_domain_allowlist →
 025_access_control_hardening → 026_message_rate_limit →
 027_pseudonym_oracle_guard → 028_messages_link_url → 029_fix_link_url_receipt_hash →
-030_verify_authenticity_link_url
+030_verify_authenticity_link_url → 031_legacy_hash_fallback_and_link_url_dedup →
+032_mod_admin_portal → 033_fix_resolve_report → 034_ban_auth_integration →
+035_ban_enforcement → 036_fix_ban_and_report_hash
 ```
 
 ### Tables
@@ -365,7 +400,7 @@ handshake-union/
 - message_room: enum
 - message_created_at: timestamp
 - reported_at: timestamp
-- status: text ('pending', 'reviewed', 'actioned', 'dismissed')
+- status: text ('pending' | 'reviewed' | 'actioned' | 'dismissed') — `actioned` is a manual label meaning the moderator took a separate action (e.g. issued a ban); it does not trigger any automated side effect
 - resolved_at: timestamp (nullable)
 - resolved_by: uuid (nullable, FK to profiles)
 - resolution_notes: text (nullable)
@@ -386,6 +421,21 @@ handshake-union/
 - RLS: anyone can read enabled emotes, admins can manage
 ```
 
+**user_bans** (added migration 032 — moderator-issued bans)
+```sql
+- id: uuid
+- profile_id: uuid (FK to profiles, CASCADE on delete)
+- ban_type: text ('timeout' | 'permanent')
+- reason: text (nullable)
+- banned_by: uuid (FK to profiles — moderator who issued ban)
+- banned_at: timestamptz (default NOW())
+- expires_at: timestamptz (nullable — NULL = permanent; required for timeout bans)
+- lifted_at: timestamptz (nullable — set when ban is lifted early)
+- lifted_by: uuid (FK to profiles, nullable)
+- CONSTRAINT: timeout_requires_expiry — timeout bans must have expires_at
+- RLS: moderator+ SELECT/UPDATE; no direct INSERT (all inserts via ban_user() SECURITY DEFINER)
+```
+
 ### Database Functions & Triggers
 
 **Pseudonym management:**
@@ -400,7 +450,7 @@ handshake-union/
 
 **Chat integrity (migration 006; hash updated 029; verify updated 030):**
 - `create_message_receipt()` — trigger: auto-creates SHA-256 receipt on message INSERT (SECURITY DEFINER). Hash covers content + image_url + link_url using per-field double-SHA256 scheme (updated migration 029). Uses `SET search_path = 'public, extensions'` — required to resolve `extensions.digest()` (pgcrypto).
-- `report_message(target_message_id, reason)` — live report: machine-copies content, image_url, and link_url from DB + links to receipt. Rate-limited (10/hr). Prevents self-reports and duplicates.
+- `report_message(target_message_id, reason)` — live report: machine-copies content, image_url, and link_url from DB + links to receipt. Rate-limited (10/hr). Prevents self-reports and duplicates (NULL-safe via `IS NOT DISTINCT FROM`, fixed migration 036). Accepts both the current 3-field receipt hash and legacy 2-field hash (fixed migration 036).
 - `resolve_report(report_id, status, notes)` — moderator+: resolves a pending moderation report
 - `verify_message_authenticity(content, room, timestamp, image_url, link_url)` — returns true if a receipt exists matching all alleged fields via the 3-field hash. `image_url` and `link_url` default to NULL for backward compatibility (migration 030).
 
@@ -409,6 +459,22 @@ handshake-union/
 - `is_admin()` — JWT claim check: returns true for admin only
 - `assign_role(target_user_id, new_role)` — admin-only: assigns member/moderator/admin role
 - `verify_message_receipt(content, room, time_start, time_end)` — admin-only: checks if receipt matching alleged content exists. Returns boolean only.
+
+**Ban enforcement helper (migration 035):**
+- `is_banned()` — checks `public.user_bans` for an active (unexpired + unlifted) ban on the calling user. Used in RLS policies and explicit checks in SECURITY DEFINER functions.
+
+**Moderation portal functions (migration 032; fixes in 033–036):**
+- `ban_user(target_profile_id, ban_type, reason, expires_at)` — moderator+: issues a timeout or permanent ban. Timeout requires `expires_at`. Prevents self-ban. Syncs `auth.users.banned_until` so Supabase Auth blocks sign-in and token refresh immediately (migration 034). `banned_until` is derived from ALL active bans — a new shorter ban cannot downgrade a longer or permanent one (fixed migration 036).
+- `lift_ban(ban_id)` — moderator+: lifts an active ban, records `lifted_at` + `lifted_by`. Clears `auth.users.banned_until` only if the user has no other active overlapping bans (migration 034).
+- `get_active_bans()` — moderator+: returns all unexpired/unlifted bans with profile + moderator pseudonyms resolved (SECURITY DEFINER to bypass profile RLS).
+- `get_all_reports()` — moderator+: returns all moderation reports with reporter and author pseudonyms resolved via JOIN (SECURITY DEFINER). Ordered pending-first.
+- `resolve_report_moderated(report_id, new_status, notes)` — moderator+: resolves a pending report to `reviewed`, `actioned`, or `dismissed`. Requires `status = 'pending'` — already-resolved reports cannot be changed. (Bug from 032 fixed in 033: `status` is TEXT not an enum, no cast needed.)
+
+**Admin portal functions (migration 032):**
+- `get_platform_overview()` — admin: returns single-row aggregate: total members, active sessions (distinct user_id from auth.sessions where not expired), pending reports, active bans, messages in last 24 h (from message_receipts).
+- `get_login_activity(days_back INT)` — admin: unique logins per day from `auth.audit_log_entries` where `action = 'login'`. Aggregate only — no individual actor data returned.
+- `get_message_activity(days_back INT)` — admin: messages per day from `message_receipts`. Aggregate only — no content, no author.
+- `get_user_roles()` — admin: all users with `profile_id`, `pseudonym`, `role` (from `auth.users.raw_app_meta_data`), `member_since`, `message_count`. Required for role assignment UI (profile_id = auth user id, passed to `assign_role()`). Ordered by role seniority then join date.
 
 **Aggregate functions (safe stats access):**
 - `get_pseudonym(user_id UUID)` — returns pseudonym for chat display
@@ -428,14 +494,15 @@ handshake-union/
 
 ### Row Level Security (updated — privacy lockdown + role-gated)
 
-- **profiles**: Users can read **only their own** row, update only their own (no enumeration)
+- **profiles**: Users can read **only their own** row. UPDATE: own row AND `NOT is_banned()` (migration 035).
 - **profile_snapshots**: Users can read only their own snapshots
-- **messages**: Authenticated users can read all, insert own, delete own
-- **reactions**: Authenticated users can read all, insert/delete own
+- **messages**: Authenticated users can read all, delete own. INSERT: own row AND `NOT is_banned()` (migration 035).
+- **reactions**: Authenticated users can read all, delete own. INSERT: own row AND `NOT is_banned()` (migration 035).
 - **baseline_stats**: Authenticated users can read all
 - **message_receipts**: Deny ALL for authenticated. System-level only (SECURITY DEFINER functions bypass RLS)
 - **moderation_reports**: Deny ALL baseline. Moderator+ can SELECT/UPDATE. Admin can DELETE. Members INSERT via `report_message()` only.
 - **custom_emotes**: Anyone can read enabled emotes. Admins can manage (insert/update/delete).
+- **user_bans**: Moderator+ can SELECT/UPDATE. No direct INSERT (via `ban_user()` SECURITY DEFINER only). Members have no access.
 
 ### Realtime
 
@@ -595,6 +662,27 @@ Two scheduled crons (requires pg_cron extension — commented in migration, run 
 - [ ] Test with small group
 - [ ] Seed custom emotes with actual hosted images
 
+### Phase 7: Moderation & Admin Portal ✅ COMPLETE
+- [x] `user_bans` table with RLS — timeout + permanent bans, expiry, lift tracking (migration 032)
+- [x] `ban_user()` — moderator+: issues ban with type validation and self-ban prevention
+- [x] `lift_ban()` — moderator+: lifts ban, records who lifted it
+- [x] `get_active_bans()` — moderator+: unexpired/unlifted bans with pseudonyms (SECURITY DEFINER)
+- [x] `get_all_reports()` — moderator+: all reports with reporter + author pseudonyms (SECURITY DEFINER)
+- [x] `resolve_report_moderated()` — moderator+: resolves pending reports to reviewed/actioned/dismissed (migration 032; TEXT cast bug fixed in 033)
+- [x] `get_platform_overview()` — admin: single-row platform health aggregate
+- [x] `get_login_activity()` — admin: unique logins/day from audit_log_entries (aggregate only)
+- [x] `get_message_activity()` — admin: messages/day from receipts (aggregate only)
+- [x] `get_user_roles()` — admin: all users with profile_id + role for role assignment
+- [x] `RoleRoute` component — JWT role-gated route wrapper, redirects unauthorized to `/`
+- [x] `useModerationReports` hook — reports + bans data, resolve/ban/lift actions, PostgrestError surfacing
+- [x] `useAdminStats` hook — overview + activity data + user roles, configurable day window
+- [x] `Mod.tsx` — queue tab (report cards with inline image + LinkPreview + resolve + ban-author form), bans tab (active bans + lift)
+- [x] `Admin.tsx` — overview stat cards, SVG activity bar charts (7/14/30/90d), role management table with search + inline assign
+- [x] Navbar — `/mod` (warning colour, moderator+), `/admin` (red, admin only) links conditionally shown
+- [x] Routes — `/mod` wrapped in `RoleRoute minRole="moderator"`, `/admin` wrapped in `RoleRoute minRole="admin"`
+- [x] `ban_user()` fix — strongest active ban preserved in `banned_until`; a new shorter ban cannot downgrade a permanent or longer-running one (migration 036)
+- [x] `report_message()` fix — corrected receipt hash scheme (no `|` separators), added legacy 2-field hash fallback, NULL-safe duplicate detection via `IS NOT DISTINCT FROM` (migration 036)
+
 ---
 
 ## Security Considerations
@@ -630,8 +718,8 @@ Two scheduled crons (requires pg_cron extension — commented in migration, run 
 ### Short-term (pre/peri launch)
 - [ ] **Phase 6 completion** — error boundaries, loading states, mobile responsiveness pass
 - [ ] **Seed custom emotes** — upload actual hosted images for the custom emote set
-- [ ] **Moderator dashboard** — `/mod` route gated by role. View pending reports, resolve, see reported content.
-- [ ] **Admin dashboard** — `/admin` route. Receipt verification UI, role management, platform health.
+- [x] **Moderator dashboard** — `/mod` route: report queue with inline resolve + ban-author; active bans tab with lift. ✅ Complete (Phase 7)
+- [x] **Admin dashboard** — `/admin` route: platform overview, login + message activity charts, role management. ✅ Complete (Phase 7)
 - [ ] **Retrospective report form** — `/report` for post-TTL reports. User-provided content verified against receipt hashes. Trust levels: receipt-verified vs unverified.
 - [ ] **README polish** — full setup guide, contributing instructions, self-hosting notes
 - [ ] **Test round** — closed group test, gather feedback on UX and data collection
@@ -639,7 +727,7 @@ Two scheduled crons (requires pg_cron extension — commented in migration, run 
 ### Long-term (post-POC, if demand warrants)
 
 #### Moderation & Trust
-- **Ban/warn system** — timeouts, pseudonym bans, escalation tiers
+- [x] **Ban system** — timeout + permanent bans via `/mod` portal, lift-ban support. ✅ Complete (Phase 7)
 - **Notification system** — alert moderators of new reports in real time
 - **Invite-only growth** — web-of-trust referral model to slow bad actors
 - **LLM-assisted moderation** — flag problematic content for review queue
@@ -679,6 +767,36 @@ AGPL-3.0 — Ensures the code remains open even if someone forks and runs their 
 ## Changelog
 
 > Tracks scope changes, feature additions, and meaningful deviations from the original plan over the life of the project. Migrations and bug fixes are listed separately in `supabase/migrations/`.
+
+### 2026-03-08 — Ban and report hash fixes (migration 036)
+
+- **Fixed:** `ban_user()` was unconditionally overwriting `auth.users.banned_until` with the new ban's value (migration 034). A timeout ban issued after a permanent ban would downgrade `banned_until` from `'infinity'` to a future timestamp, allowing early re-login. Now derives `banned_until` from all currently active bans: `'infinity'` if any permanent ban is active, otherwise `MAX(expires_at)` across active timeout bans. Strongest ban always wins.
+- **Fixed:** `report_message()` was computing the receipt hash with `'|'` separators between field digests (migration 035). The actual hash scheme (used by `create_message_receipt()` since migration 029) concatenates without separators. Reports against any message created after migration 029 always failed with "integrity error: no receipt found". Also: added the legacy 2-field hash fallback (for receipts created before migration 029), and tightened duplicate detection to use `IS NOT DISTINCT FROM` so NULL image/link fields compare correctly.
+- **Note:** Migrations 034 and 035 had already been applied. These fixes are in a new migration (036) that replaces both functions via `CREATE OR REPLACE`.
+- **Affected:** `supabase/migrations/036_fix_ban_and_report_hash.sql` (new).
+
+### 2026-03-08 — Moderation & Admin Portal
+
+- **Added:** `/mod` moderator portal (`Mod.tsx`) — gated by `moderator` or `admin` role via new `RoleRoute` component. Two tabs:
+  - **Queue** — all moderation reports ordered pending-first, with status filter tabs. Each report card renders the message text, images inline (`<img>` with `onError` hide), and link preview cards via the existing `LinkPreview` component. One-click resolve actions (reviewed / actioned / dismiss) with optional resolution notes. Inline "ban author" form on pending reports — issue timeout (hours input) or permanent ban with reason.
+  - **Bans** — active (unexpired + unlifted) bans with lift-ban button on each entry. Pending/ban counts shown as tag badges on tab labels.
+- **Added:** `/admin` admin portal (`Admin.tsx`) — gated by `admin` role only. Three sections:
+  - **Overview** — five stat cards: total members, active sessions (distinct user_id from `auth.sessions` not expired), pending reports, active bans, messages last 24 h.
+  - **Activity** — SVG bar charts (built inline, no external charting library, terminal aesthetic) for login activity (unique logins/day) and message activity (messages/day from receipts). Day window selector: 7 / 14 / 30 / 90 days.
+  - **Roles** — searchable table of all users (pseudonym, current role tag, message count, join date). Inline role dropdown per row; "apply" button appears only when a change is pending.
+- **Added:** `RoleRoute` component (`src/components/auth/RoleRoute.tsx`) — wraps routes like `ProtectedRoute` but also checks `user.app_metadata.role` from the JWT. Redirects unauthenticated users to `/login`, unauthorized users to `/`. Accepts `minRole: 'moderator' | 'admin'`.
+- **Added:** `useModerationReports` hook — fetches all reports + active bans in parallel via `get_all_reports()` and `get_active_bans()` RPCs. Exposes `resolveReport()`, `banUser()`, `liftBan()` actions. Error handling properly extracts `.message` from Supabase `PostgrestError` (which is not `instanceof Error`).
+- **Added:** `useAdminStats` hook — fetches platform overview, login activity, message activity, and user roles in parallel. Configurable `daysBack` state triggers refetch. Exposes `assignRole()` which calls existing `assign_role()` from migration 007.
+- **Added:** `user_bans` table (migration 032) — `timeout` | `permanent` bans with `expires_at` (required for timeout), `lifted_at`, `banned_by`, `lifted_by`. DB-level constraint `timeout_requires_expiry`. RLS: moderator+ SELECT/UPDATE; INSERT only via `ban_user()` SECURITY DEFINER.
+- **Added:** `ban_user()`, `lift_ban()`, `get_active_bans()`, `get_all_reports()`, `resolve_report_moderated()` DB functions (migration 032) — all moderator+, all `SET search_path = ''`.
+- **Fixed:** `ban_user()` and `lift_ban()` now sync with `auth.users.banned_until` (migration 034) — bans are enforced at the Supabase Auth layer (sign-in rejected, token refresh blocked), not just recorded. `lift_ban()` only clears `banned_until` if the user has no other active bans remaining. Strongest-ban preservation corrected in migration 036.
+- **Added:** `get_platform_overview()`, `get_login_activity()`, `get_message_activity()`, `get_user_roles()` DB functions (migration 032) — all admin-only, aggregate only, no individual data exposed.
+- **Fixed:** `resolve_report_moderated()` bug (migration 033) — migration 032 incorrectly cast `p_new_status::public.moderation_report_status`; `moderation_reports.status` is a TEXT column with a CHECK constraint (no enum type). Fixed to plain TEXT assignment.
+- **Updated:** `Navbar.tsx` — `/mod` link shown in warning colour to moderators and admins; `/admin` link shown in red to admins only. Role read from `user.app_metadata.role` JWT claim.
+- **Updated:** `App.tsx` — `/mod` and `/admin` routes added, wrapped in `RoleRoute`.
+- **Updated:** `src/types/database.ts` — added `BanType`, `UserBan`, `ReportWithPseudonyms`, `PlatformOverview`, `ActivityDataPoint`, `UserRoleEntry` types.
+- **Not in original plan** (moderator dashboard and admin dashboard were short-term roadmap items).
+- **Affected:** `src/pages/Mod.tsx` (new), `src/pages/Admin.tsx` (new), `src/components/auth/RoleRoute.tsx` (new), `src/hooks/useModerationReports.ts` (new), `src/hooks/useAdminStats.ts` (new), `src/components/layout/Navbar.tsx`, `src/App.tsx`, `src/types/database.ts`, migrations 032–036.
 
 ### 2026-03-08 — Link sharing with Open Graph preview
 
