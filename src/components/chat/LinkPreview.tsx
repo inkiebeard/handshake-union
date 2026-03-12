@@ -4,8 +4,22 @@ import { supabase } from '../../lib/supabase';
 interface OgData {
   title: string | null;
   description: string | null;
-  // base64 data URL proxied server-side — viewer IP never touches the CDN.
   image: string | null;
+  url: string | null;
+  siteName: string | null;
+  type: string | null;
+  imageWidth: string | null;
+  imageHeight: string | null;
+  imageAlt: string | null;
+  imageType: string | null;
+  videoUrl: string | null;
+  videoType: string | null;
+  videoWidth: string | null;
+  videoHeight: string | null;
+  twitterCard: string | null;
+  twitterSite: string | null;
+  twitterCreator: string | null;
+  twitterImageAlt: string | null;
 }
 
 // Module-level cache — shared across all LinkPreview instances.
@@ -103,35 +117,50 @@ export function LinkPreview({ url }: { url: string }) {
   }, [url]);
 
   const hasRichData = !loading && ogData && (ogData.title || ogData.description);
+  const hasVideo = !loading && ogData?.videoUrl;
+  const displaySiteName = ogData?.siteName || hostname;
+  const imageAlt = ogData?.imageAlt || ogData?.twitterImageAlt || '';
 
   return (
     <div className="chat-link-preview">
       <a
-        href={url}
+        href={hasVideo ? ogData.videoUrl! : url}
         target="_blank"
         rel="noopener noreferrer"
         className="chat-link-preview-anchor"
       >
         {loading ? (
           <PreviewSkeleton />
-        ) : hasRichData ? (
+        ) : hasRichData || hasVideo ? (
           <div className="chat-link-preview-rich">
-            {ogData.image && (
-              <img
-                src={ogData.image}
-                alt=""
-                className="chat-link-preview-thumb"
-                onError={(e) => { e.currentTarget.style.display = 'none'; }}
-              />
+            {(ogData.image || hasVideo) && (
+              <div className="chat-link-preview-media">
+                {hasVideo ? (
+                  <div className="chat-link-preview-video-badge">
+                    <span className="chat-link-preview-play-icon">▶</span>
+                    <span>Video</span>
+                  </div>
+                ) : (
+                  <img
+                    src={ogData.image!}
+                    alt={imageAlt}
+                    className="chat-link-preview-thumb"
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                  />
+                )}
+              </div>
             )}
             <div className="chat-link-preview-meta">
+              {ogData.type && ogData.type !== 'website' && (
+                <span className="chat-link-preview-type">{ogData.type}</span>
+              )}
               {ogData.title && (
                 <span className="chat-link-preview-title">{ogData.title}</span>
               )}
               {ogData.description && (
                 <span className="chat-link-preview-desc">{ogData.description}</span>
               )}
-              <span className="chat-link-preview-domain">&#128279; {hostname}</span>
+              <span className="chat-link-preview-domain">&#128279; {displaySiteName}</span>
             </div>
           </div>
         ) : (

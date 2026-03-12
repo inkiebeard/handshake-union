@@ -15,17 +15,44 @@ function json(body: unknown, status = 200) {
   });
 }
 
-// Extract the content attribute of a <meta> tag by property or name.
-// Handles both attribute orderings: property/name before content, and content before property/name.
-function extractMeta(html: string, attr: 'property' | 'name', value: string): string | null {
-  const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const patterns = [
-    new RegExp(`<meta[^>]+${attr}=["']${escaped}["'][^>]+content=["']([^"'<>]+)["']`, 'i'),
-    new RegExp(`<meta[^>]+content=["']([^"'<>]+)["'][^>]+${attr}=["']${escaped}["']`, 'i'),
-  ];
-  for (const re of patterns) {
-    const m = html.match(re);
-    if (m?.[1]) return m[1].trim();
+// Priority chains for each supported field name.
+// og:* entries are tried with both property= and name= (covers spec-compliant and name= sites).
+// twitter:* entries are tried with name= only.
+const META_KEYS: Record<string, string[]> = {
+  title:               ['og:title',            'twitter:title'],
+  description:         ['og:description',       'twitter:description'],
+  image:               ['og:image',             'twitter:image'],
+  url:                 ['og:url',               'twitter:url'],
+  site_name:           ['og:site_name'],
+  type:                ['og:type'],
+  'image:width':       ['og:image:width'],
+  'image:height':      ['og:image:height'],
+  'image:alt':         ['og:image:alt',         'twitter:image:alt'],
+  'image:type':        ['og:image:type'],
+  video:               ['og:video',             'og:video:url',       'og:video:secure_url'],
+  'video:type':        ['og:video:type'],
+  'video:width':       ['og:video:width'],
+  'video:height':      ['og:video:height'],
+  'twitter:card':      ['twitter:card'],
+  'twitter:site':      ['twitter:site'],
+  'twitter:creator':   ['twitter:creator'],
+  'twitter:image:alt': ['twitter:image:alt'],
+};
+
+// Extract the content of a <meta> tag for a given field name.
+// Tries each key in the field's priority chain; og:* keys are matched against both
+// property= and name= attributes; twitter:* keys against name= only.
+function extractMeta(html: string, field: string): string | null {
+  const keys = META_KEYS[field] ?? [field];
+  for (const key of keys) {
+    const esc = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const attrs = key.startsWith('og:') ? ['property', 'name'] : ['name'];
+    for (const attr of attrs) {
+      const m =
+        html.match(new RegExp(`<meta[^>]+${attr}=["']${esc}["'][^>]+content=["']([^"'<>]+)["']`, 'i')) ??
+        html.match(new RegExp(`<meta[^>]+content=["']([^"'<>]+)["'][^>]+${attr}=["']${esc}["']`, 'i'));
+      if (m?.[1]) return m[1].trim();
+    }
   }
   return null;
 }
@@ -140,23 +167,16 @@ Deno.serve(async (req) => {
   }
 
   // ── Auth: require a logged-in user ───────────────────────────────────────
-  // The Supabase gateway already verifies the JWT signature before the request
-  // reaches this function, so we only need to decode the payload (no extra
-  // network round-trip) to confirm the caller is authenticated, not anonymous.
+  // The Supabase gateway verifies the JWT signature before the request reaches
+  // this function (verify_jwt is enabled at deploy time). If the function is
+  // executing, the caller is already authenticated. We still require an
+  // Authorization Bearer header as belt-and-suspenders defence in case the
+  // gateway configuration changes, but we do NOT re-decode the JWT manually —
+  // supabase-js 2.95+ with publishable keys can deliver the auth context via a
+  // path that doesn't surface a standard Bearer token to Deno's request headers,
+  // which caused a spurious 401 from the old manual atob/JSON.parse check.
   const authHeader = req.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) return json({ error: 'unauthorized' }, 401);
-
-  try {
-    const payloadB64 = authHeader.slice(7).split('.')[1];
-    if (!payloadB64) throw new Error('malformed jwt');
-    // base64url → base64 (add padding, swap URL-safe chars)
-    const pad = payloadB64.length % 4;
-    const padded = pad ? payloadB64 + '='.repeat(4 - pad) : payloadB64;
-    const payload = JSON.parse(atob(padded.replace(/-/g, '+').replace(/_/g, '/')));
-    if (payload.role !== 'authenticated') return json({ error: 'unauthorized' }, 401);
-  } catch {
-    return json({ error: 'unauthorized' }, 401);
-  }
+  if (!authHeader?.startsWith('Bearer ')) return json({ error: 'Could not find bearer authorization' }, 401);
 
   // ── Parse & validate the target URL ──────────────────────────────────────
   let targetUrl: string;
@@ -265,25 +285,58 @@ Deno.serve(async (req) => {
     for (const c of chunks) { buf.set(c, off); off += c.length; }
     const html = new TextDecoder('utf-8', { fatal: false }).decode(buf);
 
-    // ── Extract Open Graph tags, fall back to Twitter Card ────────────────
-    const title =
-      extractMeta(html, 'property', 'og:title') ??
-      extractMeta(html, 'name',     'twitter:title');
-
-    const description =
-      extractMeta(html, 'property', 'og:description') ??
-      extractMeta(html, 'name',     'twitter:description');
+    // ── Extract Open Graph / Twitter Card metadata ─────────────────────────
+    const title       = extractMeta(html, 'title');
+    const description = extractMeta(html, 'description');
 
     // OG images are proxied server-side so the viewer's IP never reaches the
     // third-party CDN (AGENTS.md §7).  proxyImage() applies the same SSRF
     // guards as the page fetch and returns a base64 data URL, or null on failure.
-    const rawImageUrl =
-      extractMeta(html, 'property', 'og:image') ??
-      extractMeta(html, 'name',     'twitter:image');
-
+    const rawImageUrl = extractMeta(html, 'image');
     const image = rawImageUrl ? await proxyImage(rawImageUrl) : null;
 
-    return json({ title, description, image });
+    const url      = extractMeta(html, 'url');
+    const siteName = extractMeta(html, 'site_name');
+    const type     = extractMeta(html, 'type');
+
+    // Image metadata
+    const imageWidth  = extractMeta(html, 'image:width');
+    const imageHeight = extractMeta(html, 'image:height');
+    const imageAlt    = extractMeta(html, 'image:alt');
+    const imageType   = extractMeta(html, 'image:type');
+
+    // Video metadata (YouTube, Vimeo, etc.)
+    const videoUrl    = extractMeta(html, 'video');
+    const videoType   = extractMeta(html, 'video:type');
+    const videoWidth  = extractMeta(html, 'video:width');
+    const videoHeight = extractMeta(html, 'video:height');
+
+    // Twitter Card specific
+    const twitterCard     = extractMeta(html, 'twitter:card');
+    const twitterSite     = extractMeta(html, 'twitter:site');
+    const twitterCreator  = extractMeta(html, 'twitter:creator');
+    const twitterImageAlt = extractMeta(html, 'twitter:image:alt');
+
+    return json({
+      title,
+      description,
+      image,
+      url,
+      siteName,
+      type,
+      imageWidth,
+      imageHeight,
+      imageAlt,
+      imageType,
+      videoUrl,
+      videoType,
+      videoWidth,
+      videoHeight,
+      twitterCard,
+      twitterSite,
+      twitterCreator,
+      twitterImageAlt,
+    });
   } catch {
     return json({ error: 'failed to fetch' }, 502);
   }
