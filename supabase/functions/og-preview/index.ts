@@ -17,11 +17,14 @@ function json(body: unknown, status = 200) {
 
 // Extract the content attribute of a <meta> tag by property or name.
 // Handles both attribute orderings: property/name before content, and content before property/name.
+// Also handles <meta> tags where the value is prefixed with "og:" (e.g., name="og:title").
 function extractMeta(html: string, attr: 'property' | 'name', value: string): string | null {
   const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const patterns = [
     new RegExp(`<meta[^>]+${attr}=["']${escaped}["'][^>]+content=["']([^"'<>]+)["']`, 'i'),
     new RegExp(`<meta[^>]+content=["']([^"'<>]+)["'][^>]+${attr}=["']${escaped}["']`, 'i'),
+    new RegExp(`<meta[^>]+${attr}=["']og:${escaped}["'][^>]+content=["']([^"'<>]+)["']`, 'i'),
+    new RegExp(`<meta[^>]+content=["']([^"'<>]+)["'][^>]+${attr}=["']og:${escaped}["']`, 'i'),
   ];
   for (const re of patterns) {
     const m = html.match(re);
@@ -283,7 +286,56 @@ Deno.serve(async (req) => {
 
     const image = rawImageUrl ? await proxyImage(rawImageUrl) : null;
 
-    return json({ title, description, image });
+    // Additional OG/Twitter metadata
+    const url =
+      extractMeta(html, 'property', 'og:url') ??
+      extractMeta(html, 'name',     'twitter:url');
+
+    const siteName = extractMeta(html, 'property', 'og:site_name');
+
+    const type = extractMeta(html, 'property', 'og:type');
+
+    // Image metadata
+    const imageWidth = extractMeta(html, 'property', 'og:image:width');
+    const imageHeight = extractMeta(html, 'property', 'og:image:height');
+    const imageAlt = extractMeta(html, 'property', 'og:image:alt');
+    const imageType = extractMeta(html, 'property', 'og:image:type');
+
+    // Video metadata (YouTube, Vimeo, etc.)
+    const videoUrl =
+      extractMeta(html, 'property', 'og:video') ??
+      extractMeta(html, 'property', 'og:video:url') ??
+      extractMeta(html, 'property', 'og:video:secure_url');
+    const videoType = extractMeta(html, 'property', 'og:video:type');
+    const videoWidth = extractMeta(html, 'property', 'og:video:width');
+    const videoHeight = extractMeta(html, 'property', 'og:video:height');
+
+    // Twitter Card specific
+    const twitterCard = extractMeta(html, 'name', 'twitter:card');
+    const twitterSite = extractMeta(html, 'name', 'twitter:site');
+    const twitterCreator = extractMeta(html, 'name', 'twitter:creator');
+    const twitterImageAlt = extractMeta(html, 'name', 'twitter:image:alt');
+
+    return json({
+      title,
+      description,
+      image,
+      url,
+      siteName,
+      type,
+      imageWidth,
+      imageHeight,
+      imageAlt,
+      imageType,
+      videoUrl,
+      videoType,
+      videoWidth,
+      videoHeight,
+      twitterCard,
+      twitterSite,
+      twitterCreator,
+      twitterImageAlt,
+    });
   } catch {
     return json({ error: 'failed to fetch' }, 502);
   }
