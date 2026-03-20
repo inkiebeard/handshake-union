@@ -447,7 +447,6 @@ Deno.serve(async (req) => {
     let off = 0;
     for (const c of chunks) { buf.set(c, off); off += c.length; }
     const html = new TextDecoder('utf-8', { fatal: false }).decode(buf);
-    console.log(`From target: ${targetUrl} received: ${html}`)
 
     // ── Extract Open Graph / Twitter Card metadata ─────────────────────────
     // Fall back to <title> element if no OG/Twitter title meta tag is found.
@@ -504,27 +503,6 @@ Deno.serve(async (req) => {
     const twitterSite     = extractMeta(html, 'twitter:site');
     const twitterCreator  = extractMeta(html, 'twitter:creator');
     const twitterImageAlt = extractMeta(html, 'twitter:image:alt');
-
-    console.log(`Outputting`, {
-      title,
-      description,
-      image,
-      url,
-      siteName,
-      type,
-      imageWidth,
-      imageHeight,
-      imageAlt,
-      imageType,
-      videoUrl,
-      videoType,
-      videoWidth,
-      videoHeight,
-      twitterCard,
-      twitterSite,
-      twitterCreator,
-      twitterImageAlt,
-    })
 
     return json({
       title,
