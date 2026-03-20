@@ -1,7 +1,8 @@
 const TIMEOUT_MS = 10_000;
-const MAX_BYTES = 150 * 1024;       // 150 KB — enough to capture <head> on any reasonable page
-const IMAGE_MAX_BYTES = 200 * 1024; // 200 KB — cap proxied OG thumbnail size
-const IMAGE_TIMEOUT_MS = 5_000;     // separate timeout for the image fetch
+const MAX_BYTES = 150 * 1024;         // 150 KB — enough to capture <head> on any reasonable page
+const IMAGE_MAX_BYTES = 200 * 1024;   // 200 KB — cap proxied OG thumbnail size
+const IMAGE_TIMEOUT_MS = 5_000;       // separate timeout for the image fetch
+const OEMBED_MAX_BYTES = 50 * 1024;   // 50 KB — generous for any JSON oEmbed response
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -75,26 +76,67 @@ function extractOembedDiscoveryUrl(html: string, base: string): string | null {
 }
 
 // Fetch a generic oEmbed endpoint and return whichever fields are present.
+// Uses redirect: 'manual' and re-validates each hop through validateUrl/isSafeHost
+// so a page-controlled oEmbed URL cannot redirect to a private/link-local address (SSRF).
+// Response body is streamed with a hard cap — oEmbed JSON is never large.
 async function fetchGenericOembed(
   oembedUrl: string,
   signal: AbortSignal,
   validateUrl: (raw: string, base?: string) => URL | null,
 ): Promise<{ title?: string; thumbnailUrl?: string; authorName?: string; siteName?: string } | null> {
-  const u = validateUrl(oembedUrl);
-  if (!u) return null;
+  let currentUrl = validateUrl(oembedUrl);
+  if (!currentUrl) return null;
+  const MAX_HOPS = 3;
   try {
-    const res = await fetch(u.toString(), {
-      signal,
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; HandshakeUnionBot/1.0)' },
-    });
-    if (!res.ok) return null;
-    const data = await res.json() as Record<string, unknown>;
-    return {
-      title:        typeof data.title          === 'string' ? data.title          : undefined,
-      thumbnailUrl: typeof data.thumbnail_url  === 'string' ? data.thumbnail_url  : undefined,
-      authorName:   typeof data.author_name    === 'string' ? data.author_name    : undefined,
-      siteName:     typeof data.provider_name  === 'string' ? data.provider_name  : undefined,
-    };
+    for (let hop = 0; hop <= MAX_HOPS; hop++) {
+      const res = await fetch(currentUrl.toString(), {
+        signal,
+        redirect: 'manual',
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; HandshakeUnionBot/1.0)' },
+      });
+
+      // Follow redirects manually, re-validating each destination.
+      if (res.status >= 300 && res.status < 400) {
+        const location = res.headers.get('location');
+        if (!location) return null;
+        const next = validateUrl(location, currentUrl.toString());
+        if (!next) return null;
+        currentUrl = next;
+        continue;
+      }
+
+      if (!res.ok || !res.body) return null;
+
+      // Stream with a size cap — oEmbed JSON is never large.
+      const reader = res.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let total = 0;
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done || !value) break;
+          chunks.push(value);
+          total += value.length;
+          if (total >= OEMBED_MAX_BYTES) { await reader.cancel(); break; }
+        }
+      } catch { /* stream aborted or size-capped */ }
+
+      if (chunks.length === 0) return null;
+      const buf = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+      let off = 0;
+      for (const c of chunks) { buf.set(c, off); off += c.length; }
+      const text = new TextDecoder('utf-8', { fatal: false }).decode(buf);
+      let data: Record<string, unknown>;
+      try { data = JSON.parse(text); } catch { return null; }
+
+      return {
+        title:        typeof data.title          === 'string' ? data.title          : undefined,
+        thumbnailUrl: typeof data.thumbnail_url  === 'string' ? data.thumbnail_url  : undefined,
+        authorName:   typeof data.author_name    === 'string' ? data.author_name    : undefined,
+        siteName:     typeof data.provider_name  === 'string' ? data.provider_name  : undefined,
+      };
+    }
+    return null; // exceeded max redirect hops
   } catch {
     return null;
   }
@@ -103,7 +145,8 @@ async function fetchGenericOembed(
 // Returns the YouTube video ID for youtu.be/<id> and youtube.com/watch?v=<id> URLs.
 function getYoutubeVideoId(url: URL): string | null {
   if (url.hostname === 'youtu.be') {
-    const id = url.pathname.slice(1).split(/[?#]/)[0];
+    // pathname can be /<id>, /<id>/, or /<id>/extra — extract the first non-empty segment only.
+    const id = url.pathname.split('/').filter(Boolean)[0] ?? '';
     return id || null;
   }
   if (url.hostname === 'www.youtube.com' || url.hostname === 'youtube.com' ||
@@ -404,7 +447,6 @@ Deno.serve(async (req) => {
     let off = 0;
     for (const c of chunks) { buf.set(c, off); off += c.length; }
     const html = new TextDecoder('utf-8', { fatal: false }).decode(buf);
-    console.log(`From target: ${targetUrl} received: ${html}`)
 
     // ── Extract Open Graph / Twitter Card metadata ─────────────────────────
     // Fall back to <title> element if no OG/Twitter title meta tag is found.
@@ -461,27 +503,6 @@ Deno.serve(async (req) => {
     const twitterSite     = extractMeta(html, 'twitter:site');
     const twitterCreator  = extractMeta(html, 'twitter:creator');
     const twitterImageAlt = extractMeta(html, 'twitter:image:alt');
-
-    console.log(`Outputting`, {
-      title,
-      description,
-      image,
-      url,
-      siteName,
-      type,
-      imageWidth,
-      imageHeight,
-      imageAlt,
-      imageType,
-      videoUrl,
-      videoType,
-      videoWidth,
-      videoHeight,
-      twitterCard,
-      twitterSite,
-      twitterCreator,
-      twitterImageAlt,
-    })
 
     return json({
       title,
