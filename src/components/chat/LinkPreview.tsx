@@ -124,7 +124,7 @@ export function LinkPreview({ url }: { url: string }) {
   return (
     <div className="chat-link-preview">
       <a
-        href={hasVideo ? ogData.videoUrl! : url}
+        href={url}
         target="_blank"
         rel="noopener noreferrer"
         className="chat-link-preview-anchor"

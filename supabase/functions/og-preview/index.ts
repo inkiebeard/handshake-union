@@ -1,7 +1,7 @@
-const TIMEOUT_MS = 5_000;
-const MAX_BYTES = 100 * 1024;       // 100 KB — enough to capture <head> on any reasonable page
+const TIMEOUT_MS = 10_000;
+const MAX_BYTES = 150 * 1024;       // 150 KB — enough to capture <head> on any reasonable page
 const IMAGE_MAX_BYTES = 200 * 1024; // 200 KB — cap proxied OG thumbnail size
-const IMAGE_TIMEOUT_MS = 3_000;     // separate timeout for the image fetch
+const IMAGE_TIMEOUT_MS = 5_000;     // separate timeout for the image fetch
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -20,7 +20,7 @@ function json(body: unknown, status = 200) {
 // twitter:* entries are tried with name= only.
 const META_KEYS: Record<string, string[]> = {
   title:               ['og:title',            'twitter:title'],
-  description:         ['og:description',       'twitter:description'],
+  description:         ['og:description',       'twitter:description',  'description'],
   image:               ['og:image',             'twitter:image'],
   url:                 ['og:url',               'twitter:url'],
   site_name:           ['og:site_name'],
@@ -55,6 +55,86 @@ function extractMeta(html: string, field: string): string | null {
     }
   }
   return null;
+}
+
+// Extract the contents of the HTML <title> element as a fallback when OG/Twitter title is absent.
+function extractHtmlTitle(html: string): string | null {
+  const m = html.match(/<title[^>]*>([^<]{1,300})<\/title>/i);
+  return m?.[1]?.trim() || null;
+}
+
+// Parse the JSON oEmbed discovery URL from a page's <link> tag.
+// WordPress, Vimeo, Flickr, Soundcloud, and many others publish this.
+// Returns a resolved absolute URL string, or null if not present.
+function extractOembedDiscoveryUrl(html: string, base: string): string | null {
+  const m =
+    html.match(/<link[^>]+type=["']application\/json\+oembed["'][^>]+href=["']([^"'<>]+)["']/i) ??
+    html.match(/<link[^>]+href=["']([^"'<>]+)["'][^>]+type=["']application\/json\+oembed["']/i);
+  if (!m?.[1]) return null;
+  try { return new URL(m[1].trim(), base).toString(); } catch { return null; }
+}
+
+// Fetch a generic oEmbed endpoint and return whichever fields are present.
+async function fetchGenericOembed(
+  oembedUrl: string,
+  signal: AbortSignal,
+  validateUrl: (raw: string, base?: string) => URL | null,
+): Promise<{ title?: string; thumbnailUrl?: string; authorName?: string; siteName?: string } | null> {
+  const u = validateUrl(oembedUrl);
+  if (!u) return null;
+  try {
+    const res = await fetch(u.toString(), {
+      signal,
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; HandshakeUnionBot/1.0)' },
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as Record<string, unknown>;
+    return {
+      title:        typeof data.title          === 'string' ? data.title          : undefined,
+      thumbnailUrl: typeof data.thumbnail_url  === 'string' ? data.thumbnail_url  : undefined,
+      authorName:   typeof data.author_name    === 'string' ? data.author_name    : undefined,
+      siteName:     typeof data.provider_name  === 'string' ? data.provider_name  : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Returns the YouTube video ID for youtu.be/<id> and youtube.com/watch?v=<id> URLs.
+function getYoutubeVideoId(url: URL): string | null {
+  if (url.hostname === 'youtu.be') {
+    const id = url.pathname.slice(1).split(/[?#]/)[0];
+    return id || null;
+  }
+  if (url.hostname === 'www.youtube.com' || url.hostname === 'youtube.com' ||
+      url.hostname === 'm.youtube.com') {
+    return url.searchParams.get('v');
+  }
+  return null;
+}
+
+// Fetch YouTube oEmbed metadata. Returns structured data or null on failure.
+// oEmbed is a public, stable endpoint — no API key required.
+async function fetchYoutubeOembed(
+  videoUrl: string,
+  signal: AbortSignal,
+): Promise<{ title: string; thumbnailUrl: string; authorName: string } | null> {
+  const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(videoUrl)}&format=json`;
+  try {
+    const res = await fetch(oembedUrl, {
+      signal,
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; HandshakeUnionBot/1.0)' },
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as Record<string, unknown>;
+    const title        = typeof data.title         === 'string' ? data.title         : null;
+    const thumbnailUrl = typeof data.thumbnail_url === 'string' ? data.thumbnail_url : null;
+    const authorName   = typeof data.author_name   === 'string' ? data.author_name   : null;
+    if (!title) return null;
+    return { title, thumbnailUrl: thumbnailUrl ?? '', authorName: authorName ?? '' };
+  } catch {
+    return null;
+  }
 }
 
 // Returns true if the hostname is safe to fetch (not private/loopback/link-local).
@@ -218,6 +298,46 @@ Deno.serve(async (req) => {
     return json({ error: 'private network addresses are not allowed' }, 400);
   }
 
+  // ── YouTube: resolve short URL then use oEmbed for structured metadata ───
+  // youtu.be/<id> and youtube.com/watch?v=<id> URLs don't expose OG tags in
+  // the first 150 KB of HTML because Google injects them deeper in the page.
+  // YouTube's public oEmbed endpoint gives us title + thumbnail reliably.
+  const ytVideoId = getYoutubeVideoId(parsed);
+  if (ytVideoId) {
+    const canonicalUrl = `https://www.youtube.com/watch?v=${ytVideoId}`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    try {
+      const oembed = await fetchYoutubeOembed(canonicalUrl, controller.signal);
+      if (oembed) {
+        const image = oembed.thumbnailUrl ? await proxyImage(oembed.thumbnailUrl) : null;
+        return json({
+          title: oembed.title,
+          description: null,
+          image,
+          url: canonicalUrl,
+          siteName: 'YouTube',
+          type: 'video',
+          imageWidth: null,
+          imageHeight: null,
+          imageAlt: oembed.title,
+          imageType: null,
+          videoUrl: canonicalUrl,
+          videoType: 'text/html',
+          videoWidth: null,
+          videoHeight: null,
+          twitterCard: 'player',
+          twitterSite: '@youtube',
+          twitterCreator: oembed.authorName || null,
+          twitterImageAlt: null,
+        });
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+    // oEmbed failed — fall through to normal HTML fetch below
+  }
+
   // ── Fetch the page HTML ───────────────────────────────────────────────────
   try {
     const controller = new AbortController();
@@ -284,19 +404,44 @@ Deno.serve(async (req) => {
     let off = 0;
     for (const c of chunks) { buf.set(c, off); off += c.length; }
     const html = new TextDecoder('utf-8', { fatal: false }).decode(buf);
+    console.log(`From target: ${targetUrl} received: ${html}`)
 
     // ── Extract Open Graph / Twitter Card metadata ─────────────────────────
-    const title       = extractMeta(html, 'title');
-    const description = extractMeta(html, 'description');
+    // Fall back to <title> element if no OG/Twitter title meta tag is found.
+    let title       = extractMeta(html, 'title') ?? extractHtmlTitle(html);
+    let description = extractMeta(html, 'description');
+    let rawImageUrl = extractMeta(html, 'image');
+    let siteName    = extractMeta(html, 'site_name');
+
+    // ── oEmbed discovery fallback ───────────────────────────────────────────
+    // WordPress (and many other platforms) publish a <link type="application/json+oembed">
+    // discovery tag in <head>. If any key fields are still missing after OG extraction,
+    // try that endpoint — no API key required, works for any oEmbed-capable site.
+    if (!title || !rawImageUrl) {
+      const oembedDiscoveryUrl = extractOembedDiscoveryUrl(html, targetUrl);
+      if (oembedDiscoveryUrl) {
+        const oembedCtrl    = new AbortController();
+        const oembedTimeout = setTimeout(() => oembedCtrl.abort(), IMAGE_TIMEOUT_MS);
+        try {
+          const oembed = await fetchGenericOembed(oembedDiscoveryUrl, oembedCtrl.signal, validateProxyUrl);
+          if (oembed) {
+            title       ??= oembed.title;
+            rawImageUrl ??= oembed.thumbnailUrl;
+            siteName    ??= oembed.siteName;
+            // description is rarely provided by oEmbed; leave as-is
+          }
+        } finally {
+          clearTimeout(oembedTimeout);
+        }
+      }
+    }
 
     // OG images are proxied server-side so the viewer's IP never reaches the
     // third-party CDN (AGENTS.md §7).  proxyImage() applies the same SSRF
     // guards as the page fetch and returns a base64 data URL, or null on failure.
-    const rawImageUrl = extractMeta(html, 'image');
     const image = rawImageUrl ? await proxyImage(rawImageUrl) : null;
 
     const url      = extractMeta(html, 'url');
-    const siteName = extractMeta(html, 'site_name');
     const type     = extractMeta(html, 'type');
 
     // Image metadata
@@ -316,6 +461,27 @@ Deno.serve(async (req) => {
     const twitterSite     = extractMeta(html, 'twitter:site');
     const twitterCreator  = extractMeta(html, 'twitter:creator');
     const twitterImageAlt = extractMeta(html, 'twitter:image:alt');
+
+    console.log(`Outputting`, {
+      title,
+      description,
+      image,
+      url,
+      siteName,
+      type,
+      imageWidth,
+      imageHeight,
+      imageAlt,
+      imageType,
+      videoUrl,
+      videoType,
+      videoWidth,
+      videoHeight,
+      twitterCard,
+      twitterSite,
+      twitterCreator,
+      twitterImageAlt,
+    })
 
     return json({
       title,

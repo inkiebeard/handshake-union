@@ -166,6 +166,7 @@ npm run dev
 - **Pseudonym oracle hardened** — `get_pseudonym()` only resolves users who have sent at least one message, preventing cold UUID enumeration
 - **Ephemeral messages** — deleted after 72 hours; rate-limited to 10 messages per minute per user at the DB level
 - **Image URL domain allowlist** — attached images must come from approved CDN providers (GIPHY, Tenor, Imgur). Enforced by a DB `CHECK` constraint and client-side validation. Add providers via `ALLOWED_IMAGE_PROVIDERS` in `src/lib/constants.ts` + a migration.
+- **Link preview anchors bound to original URL** — OG and Twitter Card metadata is fetched server-side and used for display only. The `LinkPreview` click target is always the URL the user originally shared — metadata-supplied fields like `og:url` or `og:video` are never used as anchor destinations, preventing phishing via crafted OG tags. OG images are proxied to base64 data URLs server-side so the viewer's IP never reaches a third-party CDN.
 - **Cryptographic receipts** — SHA-256 hash of every message stored automatically. No readable content, invisible to all user-facing roles. Enables tamper-evident screenshot verification without retaining message content.
 - **Moderation reports** — machine-copy content from the database (never user-provided), linked to receipts for tamper-evident verification, hard-deleted after 30 days
 - **Custom emotes authenticated-only** — the `anon` role has no access to any endpoint
@@ -183,6 +184,12 @@ npm run dev
 - Salary/conditions data starts to show patterns
 
 If it works, we grow it. If it doesn't, at least the code is open for someone else to build on.
+
+---
+
+## Changelog
+
+See [CHANGELOG.md](./CHANGELOG.md) for the full history of features, scope changes, and security fixes.
 
 ---
 
