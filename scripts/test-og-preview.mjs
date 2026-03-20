@@ -67,10 +67,13 @@ function resolveAnonKey() {
   if (anonKeyOverride) return anonKeyOverride;
   if (process.env.SUPABASE_ANON_KEY) return process.env.SUPABASE_ANON_KEY;
   try {
-    const status = execSync('npx supabase status 2>/dev/null', { encoding: 'utf8' });
+    // stdio:'pipe' captures stdout+stderr without printing to the terminal,
+    // which avoids the "The system cannot find the path specified" Windows
+    // error that leaks when using a bash-style 2>/dev/null redirect.
+    const status = execSync('npx supabase status', { encoding: 'utf8', stdio: 'pipe' });
     const match = status.match(/anon key\s*:\s*(\S+)/i);
     if (match?.[1]) return match[1];
-  } catch { /* supabase not running or CLI unavailable */ }
+  } catch { /* supabase not running or CLI unavailable — fall through to default */ }
   return LOCAL_DEFAULT_ANON_KEY;
 }
 
@@ -123,10 +126,17 @@ console.log(`${GREY}endpoint : ${endpoint}${RESET}`);
 console.log(`${GREY}target   : ${targetUrl}${RESET}`);
 console.log(`${GREY}anon key : ${anonKey.slice(0, 20)}…${RESET}\n`);
 
+// 30 s timeout — long enough for a slow external site, short enough to fail
+// fast when functions:serve isn't running rather than hanging indefinitely.
+const FETCH_TIMEOUT_MS = 30_000;
+const controller = new AbortController();
+const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
 let res;
 try {
   res = await fetch(endpoint, {
     method: 'POST',
+    signal: controller.signal,
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${anonKey}`,
@@ -134,12 +144,18 @@ try {
     body: JSON.stringify({ url: targetUrl }),
   });
 } catch (err) {
-  console.error(`${RED}${BOLD}Connection error${RESET} — is the local stack and function running?`);
+  clearTimeout(timeoutId);
+  if (err.name === 'AbortError') {
+    console.error(`${RED}${BOLD}Timed out after ${FETCH_TIMEOUT_MS / 1000} s${RESET} — is the function serving?`);
+  } else {
+    console.error(`${RED}${BOLD}Connection error${RESET} — is the local stack and function running?`);
+  }
   console.error(`${DIM}Run: npm run functions:serve   (or functions:debug for breakpoints)${RESET}`);
   console.error(`${DIM}     This starts supabase locally then serves og-preview on port ${port}.${RESET}\n`);
   console.error(err.message);
   process.exit(1);
 }
+clearTimeout(timeoutId);
 
 const body = await res.text();
 
