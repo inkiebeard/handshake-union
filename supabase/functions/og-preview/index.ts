@@ -289,17 +289,14 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: CORS });
   }
 
-  // ── Auth: require a logged-in user ───────────────────────────────────────
-  // The Supabase gateway verifies the JWT signature before the request reaches
-  // this function (verify_jwt is enabled at deploy time). If the function is
-  // executing, the caller is already authenticated. We still require an
-  // Authorization Bearer header as belt-and-suspenders defence in case the
-  // gateway configuration changes, but we do NOT re-decode the JWT manually —
-  // supabase-js 2.95+ with publishable keys can deliver the auth context via a
-  // path that doesn't surface a standard Bearer token to Deno's request headers,
-  // which caused a spurious 401 from the old manual atob/JSON.parse check.
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) return json({ error: 'Could not find bearer authorization' }, 401);
+  // ── Auth: rely on the Supabase gateway ───────────────────────────────────
+  // verify_jwt is enabled at deploy time — the gateway validates the JWT and
+  // rejects unauthenticated callers before this function executes.  No manual
+  // JWT inspection is needed or safe here: supabase-js 2.95+ with publishable
+  // keys can deliver the auth context through a path that does NOT surface a
+  // standard Bearer token in Deno's request headers, so any explicit check
+  // (whether on header presence or on decoded payload fields) spuriously 401s
+  // legitimate authenticated callers.
 
   // ── Parse & validate the target URL ──────────────────────────────────────
   let targetUrl: string;
