@@ -134,9 +134,9 @@ try {
     body: JSON.stringify({ url: targetUrl }),
   });
 } catch (err) {
-  console.error(`${RED}${BOLD}Connection error${RESET} — is the function serving?`);
-  console.error(`${DIM}Run: npx supabase functions serve og-preview --no-verify-jwt${RESET}`);
-  console.error(`${DIM}     (add --inspect to enable the debugger on port 8083)${RESET}\n`);
+  console.error(`${RED}${BOLD}Connection error${RESET} — is the local stack and function running?`);
+  console.error(`${DIM}Run: npm run functions:serve   (or functions:debug for breakpoints)${RESET}`);
+  console.error(`${DIM}     This starts supabase locally then serves og-preview on port ${port}.${RESET}\n`);
   console.error(err.message);
   process.exit(1);
 }

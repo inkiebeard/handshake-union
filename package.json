@@ -13,8 +13,8 @@
     "db:link": "supabase link",
     "db:status": "supabase migration list",
     "functions:deploy": "supabase functions deploy",
-    "functions:serve": "supabase functions serve og-preview --no-verify-jwt",
-    "functions:debug": "supabase functions serve og-preview --no-verify-jwt --inspect",
+    "functions:serve": "supabase start && supabase functions serve og-preview --no-verify-jwt",
+    "functions:debug": "supabase start && supabase functions serve og-preview --no-verify-jwt --inspect",
     "og:test": "node scripts/test-og-preview.mjs"
   },
   "dependencies": {
