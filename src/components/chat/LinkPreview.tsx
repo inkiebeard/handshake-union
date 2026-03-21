@@ -123,44 +123,36 @@ export function LinkPreview({ url }: { url: string }) {
 
   return (
     <div className="chat-link-preview">
-      <a
-        href={hasVideo ? ogData.videoUrl! : url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="chat-link-preview-anchor"
-      >
+      <a href={url} target="_blank" rel="noopener noreferrer" className="chat-link-preview-anchor">
         {loading ? (
           <PreviewSkeleton />
         ) : hasRichData || hasVideo ? (
           <div className="chat-link-preview-rich">
-            {(ogData.image || hasVideo) && (
+            {ogData.image && (
               <div className="chat-link-preview-media">
-                {hasVideo ? (
+                <img
+                  src={ogData.image!}
+                  alt={imageAlt}
+                  className="chat-link-preview-thumb"
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                  }}
+                />
+                {hasVideo && (
                   <div className="chat-link-preview-video-badge">
                     <span className="chat-link-preview-play-icon">▶</span>
                     <span>Video</span>
                   </div>
-                ) : (
-                  <img
-                    src={ogData.image!}
-                    alt={imageAlt}
-                    className="chat-link-preview-thumb"
-                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                  />
                 )}
               </div>
             )}
             <div className="chat-link-preview-meta">
-              {ogData.type && ogData.type !== 'website' && (
-                <span className="chat-link-preview-type">{ogData.type}</span>
-              )}
-              {ogData.title && (
-                <span className="chat-link-preview-title">{ogData.title}</span>
-              )}
-              {ogData.description && (
-                <span className="chat-link-preview-desc">{ogData.description}</span>
-              )}
-              <span className="chat-link-preview-domain">&#128279; {displaySiteName}</span>
+              {ogData.title && <span className="chat-link-preview-title">{ogData.title}</span>}
+              {ogData.description && <span className="chat-link-preview-desc">{ogData.description}</span>}
+              {displaySiteName && (<span className="chat-link-preview-domain">
+                {ogData.twitterCreator && <span className="chat-link-preview-creator">by {ogData.twitterCreator}</span>} &#128279; {displaySiteName}
+              </span>)}
+              {ogData.type && ogData.type !== "website" && <span className="chat-link-preview-type">{ogData.type}</span>}
             </div>
           </div>
         ) : (
@@ -170,9 +162,7 @@ export function LinkPreview({ url }: { url: string }) {
               &#128279; {hostname}
               {timedOut && <span className="chat-link-preview-timeout"> (preview unavailable)</span>}
             </span>
-            <span className="chat-link-preview-url">
-              {url.length > 80 ? url.slice(0, 80) + '\u2026' : url}
-            </span>
+            <span className="chat-link-preview-url">{url.length > 80 ? url.slice(0, 80) + "\u2026" : url}</span>
           </>
         )}
       </a>

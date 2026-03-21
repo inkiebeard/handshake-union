@@ -12,7 +12,10 @@
     "db:push": "supabase db push",
     "db:link": "supabase link",
     "db:status": "supabase migration list",
-    "functions:deploy": "supabase functions deploy"
+    "functions:deploy": "supabase functions deploy",
+    "functions:serve": "supabase start && supabase functions serve og-preview --no-verify-jwt",
+    "functions:debug": "supabase start && supabase functions serve og-preview --no-verify-jwt --inspect",
+    "og:test": "node scripts/test-og-preview.mjs"
   },
   "dependencies": {
     "@marsidev/react-turnstile": "^1.4.2",
