@@ -6,6 +6,17 @@
 
 ---
 
+### 2026-03-21 — LinkPreview UX overhaul, pg_cron local dev fix, test script fix
+
+- **Changed:** `LinkPreview` thumbnail and video badge are now independent — the thumbnail image always renders when available, and the video play badge is overlaid on top of it via `position: absolute` rather than replacing the image entirely. Previously video cards showed only the badge with no thumbnail.
+- **Added:** `twitterCreator` surfaced as `by {creator}` in the site attribution line of the rich card, giving YouTube videos and similar content a visible author/channel credit.
+- **Changed:** Content type badge repositioned to the bottom-right of the meta section (after title and description), reducing visual noise at the top of the card. `website` type continues to be suppressed.
+- **Fixed:** `supabase/roles.sql` (new) — seeds `CREATE EXTENSION IF NOT EXISTS pg_cron` before any numbered migration runs. Fixes `ERROR: schema "cron" does not exist` during `supabase start` / `supabase db reset` on local development. On hosted Supabase, pg_cron is enabled via Dashboard → Database → Extensions; this file is a no-op in that context.
+- **Fixed:** `scripts/test-og-preview.mjs` — `clearTimeout` moved into a `finally` block so the timer is always cancelled regardless of which error path is taken.
+- **Affected:** `src/components/chat/LinkPreview.tsx`, `src/index.css`, `supabase/roles.sql` (new), `scripts/test-og-preview.mjs`.
+
+---
+
 ### 2026-03-20 — og-preview: metadata expansion, oEmbed discovery, security hardening
 
 - **Improved:** `og-preview` Edge Function now streams up to 150 KB (up from 100 KB) to capture meta tags on pages with large inline scripts before `</head>`.

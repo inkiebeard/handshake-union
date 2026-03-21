@@ -146,12 +146,49 @@ supabase/migrations/
   027_pseudonym_oracle_guard.sql
 ```
 
-For message cleanup (72-hour TTL), you'll need to activate `pg_cron` in your Supabase project (Database → Extensions → pg_cron) and run the cron setup from migration 015, then apply migrations 022 and 023 to set the correct retention interval.
+For message cleanup (72-hour TTL), `pg_cron` must be enabled:
+
+- **Hosted Supabase:** Dashboard → Database → Extensions → pg_cron → Enable. Migration 015 then creates the cron jobs automatically.
+- **Local dev:** `supabase/roles.sql` runs `CREATE EXTENSION IF NOT EXISTS pg_cron` before migrations, so `supabase start` and `supabase db reset` work without manual intervention.
 
 ### Start the dev server
 
 ```bash
 npm run dev
+```
+
+### Local Edge Function development
+
+Run the `og-preview` function locally against the Supabase Docker stack:
+
+```bash
+# Serve only (no debugger) — use for og:test
+npm run functions:serve
+
+# Serve with Chrome DevTools / VS Code debugger attached on port 8083
+npm run functions:debug
+```
+
+Both commands start the local Supabase stack first if it isn't already running.
+
+Test a URL against the locally-running function:
+
+```bash
+npm run og:test -- https://example.com
+npm run og:test -- "https://youtu.be/dQw4w9WgXcQ"
+```
+
+To attach the VS Code debugger, add this to `.vscode/launch.json` then press **F5** before running `og:test`:
+
+```json
+{
+  "type": "node",
+  "request": "attach",
+  "name": "Attach to og-preview",
+  "inspectUri": "ws://127.0.0.1:8083/ws",
+  "restart": true,
+  "localRoot": "${workspaceFolder}/supabase/functions/og-preview"
+}
 ```
 
 ---
