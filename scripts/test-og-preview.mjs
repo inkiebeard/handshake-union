@@ -144,7 +144,6 @@ try {
     body: JSON.stringify({ url: targetUrl }),
   });
 } catch (err) {
-  clearTimeout(timeoutId);
   if (err.name === 'AbortError') {
     console.error(`${RED}${BOLD}Timed out after ${FETCH_TIMEOUT_MS / 1000} s${RESET} — is the function serving?`);
   } else {
@@ -154,8 +153,9 @@ try {
   console.error(`${DIM}     This starts supabase locally then serves og-preview on port ${port}.${RESET}\n`);
   console.error(err.message);
   process.exit(1);
+} finally {
+  clearTimeout(timeoutId);
 }
-clearTimeout(timeoutId);
 
 const body = await res.text();
 

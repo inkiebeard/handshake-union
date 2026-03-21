@@ -635,6 +635,7 @@ strong {
 .chat-link-preview {
   margin-top: 0.4rem;
   max-width: 420px;
+  position: relative;
 }
 
 .chat-link-preview-anchor {
@@ -709,6 +710,7 @@ strong {
   background: var(--bg);
   border-radius: 3px;
   overflow: hidden;
+  position: relative;
 }
 
 .chat-link-preview-thumb {
@@ -732,6 +734,7 @@ strong {
   color: var(--text-emphasis);
   font-size: 0.65rem;
   font-weight: 600;
+  position: absolute;
 }
 
 .chat-link-preview-play-icon {
@@ -753,6 +756,9 @@ strong {
   text-transform: uppercase;
   letter-spacing: 0.03em;
   width: fit-content;
+  position: absolute;
+  bottom: 0.15rem;
+  right: 0.25rem;
 }
 
 /* Skeleton shown while OG data is loading */
