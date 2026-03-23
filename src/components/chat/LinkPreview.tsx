@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { DEV_LINK_OVERRIDES } from '../../lib/devtools';
 
 interface OgData {
   title: string | null;
@@ -82,10 +83,18 @@ export function LinkPreview({ url }: { url: string }) {
   })();
 
   const [ogData, setOgData] = useState<OgData | null>(() => ogCache.get(url) ?? null);
-  const [loading, setLoading] = useState(!ogCache.has(url));
-  const [timedOut, setTimedOut] = useState(false);
+  const [loading, setLoading] = useState(() => {
+    if (import.meta.env.DEV && DEV_LINK_OVERRIDES.get(url) === 'loading') return true;
+    return !ogCache.has(url);
+  });
+  const [timedOut, setTimedOut] = useState(() =>
+    import.meta.env.DEV && DEV_LINK_OVERRIDES.get(url) === 'timeout'
+  );
 
   useEffect(() => {
+    // Dev override — stay frozen in the requested state, no fetch.
+    if (import.meta.env.DEV && DEV_LINK_OVERRIDES.has(url)) return;
+
     // URL already in cache — use it immediately, no fetch needed.
     if (ogCache.has(url)) {
       setOgData(ogCache.get(url) ?? null);

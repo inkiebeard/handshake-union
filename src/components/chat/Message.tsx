@@ -3,6 +3,7 @@ import { PixelAvatar } from "../PixelAvatar";
 import { ReactionPicker } from "./ReactionPicker";
 import { EmojiText, getEmoji } from "../../lib/emoji";
 import { imagePreloadCache, preloadImage } from "../../lib/imagePreloadCache";
+import { DEV_IMAGE_OVERRIDES } from "../../lib/devtools";
 import { LinkPreview } from "./LinkPreview";
 import type { Message as MessageType } from "../../types/database";
 import type { ImageDisplayMode } from "../../hooks/useImageDisplayMode";
@@ -114,9 +115,13 @@ function MessageImage({ url, mode, onLoad }: { url: string; mode: ImageDisplayMo
   // mutation. If the image was pre-warmed we go straight to 'ready' on the first render,
   // skipping the skeleton entirely — the <img> is painted at its correct intrinsic size
   // with no subsequent layout shift, so the scroll-anchor restoration stays accurate.
-  const [loadState, setLoadState] = useState<ImageLoadState>(() =>
-    isRevealed && imagePreloadCache.has(url) ? "ready" : "loading"
-  );
+  const [loadState, setLoadState] = useState<ImageLoadState>(() => {
+    if (import.meta.env.DEV) {
+      const override = DEV_IMAGE_OVERRIDES.get(url);
+      if (override) return override;
+    }
+    return isRevealed && imagePreloadCache.has(url) ? "ready" : "loading";
+  });
   const [size, setSize] = useState<{ w: number; h: number } | null>(() => {
     if (!isRevealed) return null;
     const cached = imagePreloadCache.get(url);
@@ -149,6 +154,7 @@ function MessageImage({ url, mode, onLoad }: { url: string; mode: ImageDisplayMo
   // Start preloading when the image becomes revealed and isn't already cached
   useEffect(() => {
     if (!isRevealed || loadState !== "loading") return;
+    if (import.meta.env.DEV && DEV_IMAGE_OVERRIDES.has(url)) return; // stay frozen in dev override
 
     // Re-check cache: another component may have loaded the same URL while we were loading
     const cached = imagePreloadCache.get(url);

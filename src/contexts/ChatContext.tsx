@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { initDevTools } from '../lib/devtools';
 import { preloadImages } from '../lib/imagePreloadCache';
 import type { ChatRoom, Message, Reaction } from '../types/database';
 import type { RealtimeChannel } from '@supabase/supabase-js';
@@ -414,6 +415,10 @@ export function ChatProvider({ children, userId }: { children: React.ReactNode; 
     },
     [userId, reactions]
   );
+
+  // Mount the browser console dev tools in development builds only.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (import.meta.env.DEV) initDevTools(setMessages, () => activeRoomRef.current); }, []);
 
   const value: ChatContextValue = {
     messages,
