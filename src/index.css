@@ -821,14 +821,37 @@ strong {
   padding: 0.2rem 0;
   font-family: 'Courier New', Courier, monospace;
   font-size: 0.72rem;
-  min-height: 1.5rem;
+  /* Match the 52px thumbnail row height so layout doesn't shift when the rich
+     card resolves — same principle as the image ascii-loader's fixed height. */
+  min-height: 52px;
   overflow: hidden;
+}
+
+/* Braille spinner driven entirely by CSS — no setInterval, no React re-renders. */
+@keyframes lp-spin {
+  0%   { content: '⠋'; }  10%  { content: '⠙'; }  20%  { content: '⠹'; }
+  30%  { content: '⠸'; }  40%  { content: '⠼'; }  50%  { content: '⠴'; }
+  60%  { content: '⠦'; }  70%  { content: '⠧'; }  80%  { content: '⠇'; }
+  90%  { content: '⠏'; }
+}
+/* Status-text cycling — 6 phases × 1.1 s each = 6.6 s loop. */
+@keyframes lp-msg {
+  0%,  15%  { content: 'resolving hostname…'; }
+  17%, 31%  { content: 'opening tcp/443…'; }
+  34%, 48%  { content: 'TLS handshake…'; }
+  51%, 65%  { content: 'GET / HTTP/2…'; }
+  68%, 82%  { content: 'parsing og:meta…'; }
+  85%, 100% { content: 'extracting preview…'; }
 }
 
 .chat-link-preview-skeleton-spin {
   color: var(--accent);
   flex-shrink: 0;
   min-width: 1ch;
+}
+.chat-link-preview-skeleton-spin::before {
+  content: '⠋';
+  animation: lp-spin 1.1s steps(10, end) infinite;
 }
 
 .chat-link-preview-skeleton-sep {
@@ -850,6 +873,10 @@ strong {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.chat-link-preview-skeleton-msg::before {
+  content: 'resolving hostname…';
+  animation: lp-msg 6.6s steps(1, end) infinite;
 }
 
 /* Timed-out / no-data hint */
