@@ -54,16 +54,33 @@ async function fetchOg(url: string): Promise<OgData | null> {
   return p;
 }
 
-// Skeleton card that mirrors the rich-card layout so the transition feels natural.
-function PreviewSkeleton() {
+const LINK_SPIN_FRAMES = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'];
+const LINK_FETCH_MSGS  = [
+  'resolving hostname…',
+  'opening tcp/443…',
+  'TLS handshake…',
+  'GET / HTTP/2…',
+  'parsing og:meta…',
+  'extracting preview…',
+];
+
+// Terminal-style loader — replaces the old pulsing skeleton.
+function PreviewSkeleton({ url }: { url: string }) {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 110);
+    return () => clearInterval(id);
+  }, []);
+  const spinner = LINK_SPIN_FRAMES[tick % LINK_SPIN_FRAMES.length];
+  const msg     = LINK_FETCH_MSGS[Math.floor(tick / 6) % LINK_FETCH_MSGS.length];
+  let hostname = url;
+  try { hostname = new URL(url).hostname; } catch (_) {}
   return (
     <div className="chat-link-preview-skeleton">
-      <div className="chat-link-preview-skeleton-thumb" />
-      <div className="chat-link-preview-skeleton-lines">
-        <div className="chat-link-preview-skeleton-line" style={{ width: '58%' }} />
-        <div className="chat-link-preview-skeleton-line" style={{ width: '86%' }} />
-        <div className="chat-link-preview-skeleton-line" style={{ width: '30%' }} />
-      </div>
+      <span className="chat-link-preview-skeleton-spin">{spinner}</span>
+      <span className="chat-link-preview-skeleton-host">{hostname}</span>
+      <span className="chat-link-preview-skeleton-sep">&mdash;</span>
+      <span className="chat-link-preview-skeleton-msg">{msg}</span>
     </div>
   );
 }
@@ -125,7 +142,7 @@ export function LinkPreview({ url }: { url: string }) {
     <div className="chat-link-preview">
       <a href={url} target="_blank" rel="noopener noreferrer" className="chat-link-preview-anchor">
         {loading ? (
-          <PreviewSkeleton />
+          <PreviewSkeleton url={url} />
         ) : hasRichData || hasVideo ? (
           <div className="chat-link-preview-rich">
             {ogData.image && (

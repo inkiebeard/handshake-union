@@ -61,6 +61,34 @@ function ReactionDisplay({ code }: { code: string }) {
   return <span>{code}</span>;
 }
 
+const IMG_SPIN_FRAMES = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'];
+const IMG_LOAD_MSGS   = [
+  'decoding pixel stream…',
+  'decompressing buffer…',
+  'resolving CDN route…',
+  'fetching image data…',
+  'buffering bytes…',
+];
+
+function ImageLoadingPlaceholder() {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 120);
+    return () => clearInterval(id);
+  }, []);
+  const spinner  = IMG_SPIN_FRAMES[tick % IMG_SPIN_FRAMES.length];
+  const progress = (tick * 4) % 101;
+  const filled   = Math.round(progress / 5);
+  const bar      = '█'.repeat(filled) + '░'.repeat(20 - filled);
+  const msg      = IMG_LOAD_MSGS[Math.floor(tick / 8) % IMG_LOAD_MSGS.length];
+  return (
+    <div className="chat-message-image-ascii-loader">
+      <span className="ascii-loader-spinner"><span style={{ color: 'var(--accent)' }}>{spinner}</span> {msg}</span>
+      <span className="ascii-loader-bar">[{bar}] {String(progress).padStart(3)}%</span>
+    </div>
+  );
+}
+
 type ImageLoadState = "loading" | "ready" | "error";
 
 function MessageImage({ url, mode, onLoad }: { url: string; mode: ImageDisplayMode; onLoad: () => void }) {
@@ -148,7 +176,7 @@ function MessageImage({ url, mode, onLoad }: { url: string; mode: ImageDisplayMo
   if (loadState === "loading") {
     return (
       <div className="chat-message-image">
-        <div className="chat-message-image-skeleton" />
+        <ImageLoadingPlaceholder />
       </div>
     );
   }

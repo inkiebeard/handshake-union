@@ -338,6 +338,44 @@ strong {
   color: var(--text-muted);
 }
 
+.term-footer-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.term-footer-links {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-wrap: wrap;
+}
+
+.term-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.term-footer-action-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0.1rem 0.45rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.term-footer-action-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 .footer.term-footer a {
   color: var(--text-muted);
 }
@@ -602,16 +640,30 @@ strong {
   object-fit: contain;
 }
 
-.chat-message-image-skeleton {
+.chat-message-image-ascii-loader {
   width: 100%;
-  /* Match the max-height of .chat-message-img so the skeleton never undersizes the
-     space. Images can only be equal-to or shorter than this, meaning the DOM height
-     can only stay the same or shrink — never grow — after the image loads. */
+  /* Holds the same 300px footprint as the old skeleton so no layout shift on reveal */
   height: 300px;
-  background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: 4px;
-  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  background: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0.55rem;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.ascii-loader-spinner { display: block; }
+
+.ascii-loader-bar {
+  display: block;
+  color: var(--accent);
+  opacity: 0.65;
+  letter-spacing: 0.03em;
 }
 
 @keyframes skeleton-pulse {
@@ -761,36 +813,40 @@ strong {
   right: 0.25rem;
 }
 
-/* Skeleton shown while OG data is loading */
+/* Terminal loader shown while OG data is being fetched */
 .chat-link-preview-skeleton {
   display: flex;
-  gap: 0.6rem;
-  align-items: flex-start;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.2rem 0;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.72rem;
+  min-height: 1.5rem;
+  overflow: hidden;
 }
 
-.chat-link-preview-skeleton-thumb {
-  width: 72px;
-  height: 52px;
-  border-radius: 3px;
+.chat-link-preview-skeleton-spin {
+  color: var(--accent);
   flex-shrink: 0;
-  background: var(--bg);
-  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  min-width: 1ch;
 }
 
-.chat-link-preview-skeleton-lines {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  padding-top: 0.15rem;
+.chat-link-preview-skeleton-sep {
+  color: var(--border);
+  flex-shrink: 0;
 }
 
-.chat-link-preview-skeleton-line {
-  height: 0.65rem;
-  border-radius: 3px;
-  background: var(--bg);
-  animation: skeleton-pulse 1.5s ease-in-out infinite;
+.chat-link-preview-skeleton-host {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.chat-link-preview-skeleton-msg {
+  color: var(--text-muted);
+  opacity: 0.45;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Timed-out / no-data hint */
