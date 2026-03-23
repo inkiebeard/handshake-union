@@ -70,21 +70,36 @@ const IMG_LOAD_MSGS   = [
   'buffering bytes…',
 ];
 
-function ImageLoadingPlaceholder() {
-  const [tick, setTick] = useState(0);
+// Shared module-level ticker — one interval regardless of how many image placeholders are mounted.
+let _imgTick = 0;
+const _imgListeners = new Set<(t: number) => void>();
+let _imgTickerStarted = false;
+function _startImgTicker() {
+  if (_imgTickerStarted) return;
+  _imgTickerStarted = true;
+  setInterval(() => { _imgTick += 1; _imgListeners.forEach(l => l(_imgTick)); }, 120);
+}
+function useImgTick() {
+  const [tick, setTick] = useState(_imgTick);
   useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 120);
-    return () => clearInterval(id);
+    _startImgTicker();
+    _imgListeners.add(setTick);
+    return () => { _imgListeners.delete(setTick); };
   }, []);
+  return tick;
+}
+
+function ImageLoadingPlaceholder() {
+  const tick     = useImgTick();
   const spinner  = IMG_SPIN_FRAMES[tick % IMG_SPIN_FRAMES.length];
   const progress = (tick * 4) % 101;
   const filled   = Math.round(progress / 5);
   const bar      = '█'.repeat(filled) + '░'.repeat(20 - filled);
   const msg      = IMG_LOAD_MSGS[Math.floor(tick / 8) % IMG_LOAD_MSGS.length];
   return (
-    <div className="chat-message-image-ascii-loader">
-      <span className="ascii-loader-spinner"><span style={{ color: 'var(--accent)' }}>{spinner}</span> {msg}</span>
-      <span className="ascii-loader-bar">[{bar}] {String(progress).padStart(3)}%</span>
+    <div className="chat-message-image-ascii-loader" role="status" aria-label="Loading image">
+      <span className="ascii-loader-spinner" aria-hidden="true"><span style={{ color: 'var(--accent)' }}>{spinner}</span> {msg}</span>
+      <span className="ascii-loader-bar" aria-hidden="true">[{bar}] {String(progress).padStart(3)}%</span>
     </div>
   );
 }

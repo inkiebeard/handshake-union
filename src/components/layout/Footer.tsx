@@ -4,15 +4,15 @@ import { Link } from 'react-router-dom';
 const SKIP_KEY = 'hu_skip_intro';
 
 export function Footer() {
-  const [skipped, setSkipped] = useState(() => localStorage.getItem(SKIP_KEY) === '1');
+  const [skipped, setSkipped] = useState(() => {
+    try { return localStorage.getItem(SKIP_KEY) === '1'; } catch { return false; }
+  });
 
   function toggleIntro() {
     if (skipped) {
-      localStorage.removeItem(SKIP_KEY);
-      setSkipped(false);
+      try { localStorage.removeItem(SKIP_KEY); setSkipped(false); } catch { /* ignore */ }
     } else {
-      localStorage.setItem(SKIP_KEY, '1');
-      setSkipped(true);
+      try { localStorage.setItem(SKIP_KEY, '1'); setSkipped(true); } catch { /* ignore */ }
     }
   }
 

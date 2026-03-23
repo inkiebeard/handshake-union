@@ -64,19 +64,34 @@ const LINK_FETCH_MSGS  = [
   'extracting preview…',
 ];
 
+// Shared module-level ticker — one interval regardless of how many skeletons are mounted.
+let _linkTick = 0;
+const _linkListeners = new Set<(t: number) => void>();
+let _linkTickerStarted = false;
+function _startLinkTicker() {
+  if (_linkTickerStarted) return;
+  _linkTickerStarted = true;
+  setInterval(() => { _linkTick += 1; _linkListeners.forEach(l => l(_linkTick)); }, 110);
+}
+function useLinkTick() {
+  const [tick, setTick] = useState(_linkTick);
+  useEffect(() => {
+    _startLinkTicker();
+    _linkListeners.add(setTick);
+    return () => { _linkListeners.delete(setTick); };
+  }, []);
+  return tick;
+}
+
 // Terminal-style loader — replaces the old pulsing skeleton.
 function PreviewSkeleton({ url }: { url: string }) {
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 110);
-    return () => clearInterval(id);
-  }, []);
+  const tick    = useLinkTick();
   const spinner = LINK_SPIN_FRAMES[tick % LINK_SPIN_FRAMES.length];
   const msg     = LINK_FETCH_MSGS[Math.floor(tick / 6) % LINK_FETCH_MSGS.length];
   let hostname = url;
   try { hostname = new URL(url).hostname; } catch (_) {}
   return (
-    <div className="chat-link-preview-skeleton">
+    <div className="chat-link-preview-skeleton" aria-hidden="true">
       <span className="chat-link-preview-skeleton-spin">{spinner}</span>
       <span className="chat-link-preview-skeleton-host">{hostname}</span>
       <span className="chat-link-preview-skeleton-sep">&mdash;</span>
