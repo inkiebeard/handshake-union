@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { DEV_LINK_OVERRIDES } from '../../lib/devtools';
 
 interface OgData {
   title: string | null;
@@ -54,16 +55,20 @@ async function fetchOg(url: string): Promise<OgData | null> {
   return p;
 }
 
-// Skeleton card that mirrors the rich-card layout so the transition feels natural.
-function PreviewSkeleton() {
+// Terminal-style loader — pure CSS animation, zero JS re-renders per tick.
+// The braille spinner and cycling status text are driven entirely by @keyframes
+// (see .chat-link-preview-skeleton-spin::before and .chat-link-preview-skeleton-msg
+// in index.css), so any number of simultaneously-loading previews share the same
+// CSS animation engine with no per-component setInterval or setState cost.
+function PreviewSkeleton({ url }: { url: string }) {
+  let hostname = url;
+  try { hostname = new URL(url).hostname; } catch (_) {}
   return (
-    <div className="chat-link-preview-skeleton">
-      <div className="chat-link-preview-skeleton-thumb" />
-      <div className="chat-link-preview-skeleton-lines">
-        <div className="chat-link-preview-skeleton-line" style={{ width: '58%' }} />
-        <div className="chat-link-preview-skeleton-line" style={{ width: '86%' }} />
-        <div className="chat-link-preview-skeleton-line" style={{ width: '30%' }} />
-      </div>
+    <div className="chat-link-preview-skeleton" aria-hidden="true">
+      <span className="chat-link-preview-skeleton-spin" />
+      <span className="chat-link-preview-skeleton-host">{hostname}</span>
+      <span className="chat-link-preview-skeleton-sep">&mdash;</span>
+      <span className="chat-link-preview-skeleton-msg" />
     </div>
   );
 }
@@ -78,10 +83,18 @@ export function LinkPreview({ url }: { url: string }) {
   })();
 
   const [ogData, setOgData] = useState<OgData | null>(() => ogCache.get(url) ?? null);
-  const [loading, setLoading] = useState(!ogCache.has(url));
-  const [timedOut, setTimedOut] = useState(false);
+  const [loading, setLoading] = useState(() => {
+    if (import.meta.env.DEV && DEV_LINK_OVERRIDES.get(url) === 'loading') return true;
+    return !ogCache.has(url);
+  });
+  const [timedOut, setTimedOut] = useState(() =>
+    import.meta.env.DEV && DEV_LINK_OVERRIDES.get(url) === 'timeout'
+  );
 
   useEffect(() => {
+    // Dev override — stay frozen in the requested state, no fetch.
+    if (import.meta.env.DEV && DEV_LINK_OVERRIDES.has(url)) return;
+
     // URL already in cache — use it immediately, no fetch needed.
     if (ogCache.has(url)) {
       setOgData(ogCache.get(url) ?? null);
@@ -125,7 +138,7 @@ export function LinkPreview({ url }: { url: string }) {
     <div className="chat-link-preview">
       <a href={url} target="_blank" rel="noopener noreferrer" className="chat-link-preview-anchor">
         {loading ? (
-          <PreviewSkeleton />
+          <PreviewSkeleton url={url} />
         ) : hasRichData || hasVideo ? (
           <div className="chat-link-preview-rich">
             {ogData.image && (

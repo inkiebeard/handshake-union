@@ -7,9 +7,158 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Handshake Union</title>
     <meta name="description" content="Anonymous community platform for developers to share workplace intel and build collective power." />
+    <style>
+      /* ═══════════════════════════════════════════
+         BOOT SCREEN ANIMATION (pure HTML/CSS/JS, no React)
+         ═══════════════════════════════════════════ */
+      #boot-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: #0d1117;
+        padding: 1.8rem 2.2rem;
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 0.8rem;
+        line-height: 1.7;
+        color: #3fb950;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-sizing: border-box;
+        transition: opacity 0.55s ease;
+      }
+      #boot-screen.b-out { opacity: 0; pointer-events: none; }
+
+      .b-banner {
+        font-size: 0.68rem;
+        letter-spacing: 0.1em;
+        opacity: 0.45;
+        margin-bottom: 1.1rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        flex-shrink: 0;
+      }
+      .b-prompt-row {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        flex-shrink: 0;
+        white-space: nowrap;
+      }
+      .b-ps1  { color: #6e7681; }
+      .b-cmd  { color: #3fb950; }
+      .b-cur  {
+        display: inline-block;
+        width: 8px;
+        height: 1em;
+        background: #3fb950;
+        vertical-align: text-bottom;
+        flex-shrink: 0;
+        animation: b-blink 0.72s step-end infinite;
+      }
+      .b-cur.b-off { display: none; }
+      @keyframes b-blink { 0%,100% { opacity:1 } 50% { opacity:0 } }
+
+      #b-out {
+        flex: 1;
+        margin-top: 0.5rem;
+        overflow-y: scroll;
+        overflow-x: hidden;
+        scrollbar-width: none;
+        color: #8b949e;
+        white-space: pre;
+      }
+      #b-out::-webkit-scrollbar { display: none; }
+      #b-out .b-a  { color: #3fb950; }
+      #b-out .b-w  { color: #e3b341; }
+      #b-out .b-d  { color: #30363d; }
+      #b-out .b-b  { color: #58a6ff; }
+      #b-out .b-wh { color: #c9d1d9; }
+
+      .b-spinner-row {
+        flex-shrink: 0;
+        margin-top: 0.6rem;
+        color: #3fb950;
+        font-size: 0.8rem;
+      }
+      .b-spin { display: inline-block; width: 1ch; }
+
+      /* ═══════════════════════════════════════════
+         APP ENTRANCE ANIMATIONS  (fire on boot-reveal)
+         ═══════════════════════════════════════════ */
+      body:not(.boot-reveal) .navbar-brand,
+      body:not(.boot-reveal) .navbar-menu,
+      body:not(.boot-reveal) .term-footer,
+      body:not(.boot-reveal) .main-content {
+        opacity: 0;
+        pointer-events: none;
+        visibility: hidden;
+      }
+
+      /* 1: footer slides up */
+      .boot-reveal .term-footer {
+        animation: be-footer 0.45s cubic-bezier(0.22,1,0.36,1) 0s both;
+      }
+      /* 2a: navbar brand slides down */
+      .boot-reveal .navbar-brand {
+        animation: be-brand  0.42s cubic-bezier(0.22,1,0.36,1) 0.3s both;
+      }
+      /* 2b: navbar-menu (start + end links) drifts up from slightly below */
+      .boot-reveal .navbar-menu {
+        animation: be-menu   0.38s ease 0.6s both;
+      }
+      /* 3: main content fades + drifts down into place */
+      .boot-reveal .main-content {
+        animation: be-main   0.6s  ease 0.82s both;
+      }
+
+      @keyframes be-footer { from{opacity:0;transform:translateY(22px)}  to{opacity:1;transform:translateY(0)} }
+      @keyframes be-brand  { from{opacity:0;transform:translateY(-18px)} to{opacity:1;transform:translateY(0)} }
+      @keyframes be-menu   { from{opacity:0;transform:translateY(-8px)}  to{opacity:1;transform:translateY(0)} }
+      @keyframes be-main   { from{opacity:0;transform:translateY(14px)}  to{opacity:1;transform:translateY(0)} }
+
+      /* Honouring reduced-motion preference */
+      @media (prefers-reduced-motion: reduce) {
+        #boot-screen { display: none !important; }
+        body:not(.boot-reveal) .navbar-brand,
+        body:not(.boot-reveal) .navbar-menu,
+        body:not(.boot-reveal) .term-footer,
+        body:not(.boot-reveal) .main-content {
+          opacity: 1 !important;
+          pointer-events: auto !important;
+          visibility: visible !important;
+        }
+      }
+    </style>
+    <!-- No-JS fallback: skip boot entirely -->
+    <noscript>
+      <style>
+        #boot-screen { display: none !important; }
+        .navbar-brand, .navbar-menu, .term-footer, .main-content { opacity: 1 !important; pointer-events: auto !important; visibility: visible !important; }
+      </style>
+    </noscript>
   </head>
   <body>
+
+    <!-- ═══ BOOT SCREEN ═══ -->
+    <div id="boot-screen">
+      <div class="b-banner">HANDSHAKE//UNION &nbsp;·&nbsp; nexus-gateway v3.7.1 &nbsp;·&nbsp; AGPL-3.0 &nbsp;·&nbsp; anonymous worker solidarity platform</div>
+      <div class="b-prompt-row">
+        <span class="b-ps1">visitor@nexus:~$</span>&nbsp;<span class="b-cmd" id="b-cmd"></span><span class="b-cur" id="b-cur"></span>
+      </div>
+      <div id="b-hint" style="font-size:0.65rem;opacity:0.3;margin-top:0.35rem;display:none">press <kbd style="font:inherit;border:1px solid #3fb950;padding:0 3px;border-radius:2px">s</kbd> or <kbd style="font:inherit;border:1px solid #3fb950;padding:0 3px;border-radius:2px">esc</kbd> to skip &mdash; preference saved</div>
+      <div id="b-out"></div>
+      <div class="b-spinner-row" id="b-spinner-row" style="display:none">
+        <span class="b-spin" id="b-spin"></span>&nbsp;<span id="b-spin-label"></span>
+      </div>
+    </div>
+
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+
+    <!-- ═══ BOOT ANIMATION ═══ -->
+    <script src="/boot.js"></script>
+
   </body>
 </html>

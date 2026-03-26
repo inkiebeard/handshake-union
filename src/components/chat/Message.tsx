@@ -3,6 +3,7 @@ import { PixelAvatar } from "../PixelAvatar";
 import { ReactionPicker } from "./ReactionPicker";
 import { EmojiText, getEmoji } from "../../lib/emoji";
 import { imagePreloadCache, preloadImage } from "../../lib/imagePreloadCache";
+import { DEV_IMAGE_OVERRIDES } from "../../lib/devtools";
 import { LinkPreview } from "./LinkPreview";
 import type { Message as MessageType } from "../../types/database";
 import type { ImageDisplayMode } from "../../hooks/useImageDisplayMode";
@@ -61,6 +62,49 @@ function ReactionDisplay({ code }: { code: string }) {
   return <span>{code}</span>;
 }
 
+const IMG_SPIN_FRAMES = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'];
+const IMG_LOAD_MSGS   = [
+  'decoding pixel stream…',
+  'decompressing buffer…',
+  'resolving CDN route…',
+  'fetching image data…',
+  'buffering bytes…',
+];
+
+// Shared module-level ticker — one interval regardless of how many image placeholders are mounted.
+let _imgTick = 0;
+const _imgListeners = new Set<(t: number) => void>();
+let _imgTickerStarted = false;
+function _startImgTicker() {
+  if (_imgTickerStarted) return;
+  _imgTickerStarted = true;
+  setInterval(() => { _imgTick += 1; _imgListeners.forEach(l => l(_imgTick)); }, 120);
+}
+function useImgTick() {
+  const [tick, setTick] = useState(_imgTick);
+  useEffect(() => {
+    _startImgTicker();
+    _imgListeners.add(setTick);
+    return () => { _imgListeners.delete(setTick); };
+  }, []);
+  return tick;
+}
+
+function ImageLoadingPlaceholder() {
+  const tick     = useImgTick();
+  const spinner  = IMG_SPIN_FRAMES[tick % IMG_SPIN_FRAMES.length];
+  const progress = (tick * 4) % 101;
+  const filled   = Math.round(progress / 5);
+  const bar      = '█'.repeat(filled) + '░'.repeat(20 - filled);
+  const msg      = IMG_LOAD_MSGS[Math.floor(tick / 8) % IMG_LOAD_MSGS.length];
+  return (
+    <div className="chat-message-image-ascii-loader" role="status" aria-label="Loading image">
+      <span className="ascii-loader-spinner" aria-hidden="true"><span style={{ color: 'var(--accent)' }}>{spinner}</span> {msg}</span>
+      <span className="ascii-loader-bar" aria-hidden="true">[{bar}] {String(progress).padStart(3)}%</span>
+    </div>
+  );
+}
+
 type ImageLoadState = "loading" | "ready" | "error";
 
 function MessageImage({ url, mode, onLoad }: { url: string; mode: ImageDisplayMode; onLoad: () => void }) {
@@ -71,9 +115,13 @@ function MessageImage({ url, mode, onLoad }: { url: string; mode: ImageDisplayMo
   // mutation. If the image was pre-warmed we go straight to 'ready' on the first render,
   // skipping the skeleton entirely — the <img> is painted at its correct intrinsic size
   // with no subsequent layout shift, so the scroll-anchor restoration stays accurate.
-  const [loadState, setLoadState] = useState<ImageLoadState>(() =>
-    isRevealed && imagePreloadCache.has(url) ? "ready" : "loading"
-  );
+  const [loadState, setLoadState] = useState<ImageLoadState>(() => {
+    if (import.meta.env.DEV) {
+      const override = DEV_IMAGE_OVERRIDES.get(url);
+      if (override) return override;
+    }
+    return isRevealed && imagePreloadCache.has(url) ? "ready" : "loading";
+  });
   const [size, setSize] = useState<{ w: number; h: number } | null>(() => {
     if (!isRevealed) return null;
     const cached = imagePreloadCache.get(url);
@@ -106,6 +154,7 @@ function MessageImage({ url, mode, onLoad }: { url: string; mode: ImageDisplayMo
   // Start preloading when the image becomes revealed and isn't already cached
   useEffect(() => {
     if (!isRevealed || loadState !== "loading") return;
+    if (import.meta.env.DEV && DEV_IMAGE_OVERRIDES.has(url)) return; // stay frozen in dev override
 
     // Re-check cache: another component may have loaded the same URL while we were loading
     const cached = imagePreloadCache.get(url);
@@ -148,7 +197,7 @@ function MessageImage({ url, mode, onLoad }: { url: string; mode: ImageDisplayMo
   if (loadState === "loading") {
     return (
       <div className="chat-message-image">
-        <div className="chat-message-image-skeleton" />
+        <ImageLoadingPlaceholder />
       </div>
     );
   }
