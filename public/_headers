@@ -3,11 +3,15 @@
 # Do not re-enable unsafe-eval or unsafe-inline in script-src.
 # Cloudflare Turnstile requires:
 #   script-src  https://challenges.cloudflare.com  (widget bootstrap script)
+#   worker-src  blob:                               (Turnstile spawns blob: workers)
 #   frame-src   https://challenges.cloudflare.com  (challenge iframe)
 #   connect-src https://challenges.cloudflare.com  (token verification)
+# worker-src is intentionally separate from script-src — blob: workers cannot be
+# injected from outside without prior JS execution, and scoping to worker-src
+# prevents blob: from being used to load arbitrary <script> elements.
 # See: https://developers.cloudflare.com/pages/configuration/headers/
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src https: data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.giphy.com https://challenges.cloudflare.com; font-src 'self' data:; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src https: data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.giphy.com https://challenges.cloudflare.com; font-src 'self' data:; frame-src https://challenges.cloudflare.com; worker-src blob:; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: no-referrer
