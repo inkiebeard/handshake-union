@@ -28,9 +28,16 @@ export function Home() {
             <br />
 
             <p className="comment">why?</p>
-            <p>devs are being squeezed. AI hype weaponised against workers.</p>
+            <p>devs are being squeezed, AI hype weaponised against us.</p>
             <p>corporate individualism keeps us isolated.</p>
-            <p>this is a place to talk. humans verifying humans.</p>
+            <p>this is a place to talk, share information and build community.</p>
+
+            <br />
+
+            <p className="comment">why would I give you my salary data?</p>
+            <p>security and privacy are the core of this site.</p>
+            <p>only you can view your profile. aggregation ensures completely anonymous public access.</p>
+            <p>public data allows us to have the data backing when we need it.</p>
 
             <br />
 
@@ -52,10 +59,10 @@ export function Home() {
               <span style={{ color: "var(--accent)" }}>→</span> ephemeral — messages expire after 72 hours
             </p>
             <p>
-              <span style={{ color: "var(--accent)" }}>→</span> transparent — real salary data, real conditions
+              <span style={{ color: "var(--accent)" }}>→</span> transparent — real anonymised salary data, real conditions
             </p>
             <p>
-              <span style={{ color: "var(--accent)" }}>→</span> open source — no tracking, no analytics, auditable
+              <span style={{ color: "var(--accent)" }}>→</span> open source — no tracking cookies, no first-party analytics, privacy & security focused, auditable
             </p>
 
             <br />
