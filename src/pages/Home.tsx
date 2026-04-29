@@ -30,7 +30,7 @@ export function Home() {
             <p className="comment">why?</p>
             <p>devs are being squeezed, AI hype weaponised against us.</p>
             <p>corporate individualism keeps us isolated.</p>
-            <p>this is a place to talk, share infomation and build community.</p>
+            <p>this is a place to talk, share information and build community.</p>
 
             <br />
 
