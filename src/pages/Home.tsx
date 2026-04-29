@@ -62,7 +62,7 @@ export function Home() {
               <span style={{ color: "var(--accent)" }}>→</span> transparent — real anonymised salary data, real conditions
             </p>
             <p>
-              <span style={{ color: "var(--accent)" }}>→</span> open source — no tracking, no analytics, privacy & security focused, auditable
+              <span style={{ color: "var(--accent)" }}>→</span> open source — no tracking cookies, no first-party analytics, privacy & security focused, auditable
             </p>
 
             <br />
