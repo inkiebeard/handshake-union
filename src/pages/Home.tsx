@@ -37,7 +37,7 @@ export function Home() {
             <p className="comment">why would I give you my salary data?</p>
             <p>security and privacy are the core of this site.</p>
             <p>only you can view your profile. aggregation ensures completely anonymous public access.</p>
-            <p>public data allows us to have the backing when we need it.</p>
+            <p>public data allows us to have the data backing when we need it.</p>
 
             <br />
 
